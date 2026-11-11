@@ -331,3 +331,77 @@ Cross-checking §11C against `litellm_config.yaml` (the config behind `localhost
 **Verified through LiteLLM, not just upstream** — a scratch proxy on `:4100` with one single-deployment alias per model, so this exercises the provider adapter and the `max_price` guard: nemotron-ultra 200/3.33 s, ernie 200/2.26 s, north-mini-code 200/0.39 s, flint 200/1.09 s, lfm-3 200/0.40 s, qwen3.8-27b 200/0.22 s. Production restart afterwards: `health` 200, `keys loaded: 54 / 54`, one listener, and `free-mode` 6/6, `free-mode-fast` 3/3, `free-mode-large` 1/1, `true-free-tools` 1/1, `true-free-tools-fast` 1/1.
 
 **One caution this created:** `x-litellm-response-cost` is list price, not an invoice. The five OpenRouter routes report no cost, while `groq/qwen3.8-27b` reports `2.32e-05` per call even on the free plan. Do not use that header as proof of $0 — it is the same trap as the `gemma-3.1-flash-lite` case noted in §9, just in the opposite direction.
+
+---
+
+## 12. Coverage cross-check against the live gateway (`localhost:4000/v1`)
+
+Read-only audit of the running gateway against everything in §11. No config was changed for this section.
+
+### 12A. What the gateway actually serves
+
+| Metric | Value |
+|---|---|
+| Model groups in `/v1/models` | **31** |
+| Deployments in `/model/info` | **170** |
+| Distinct upstream model ids | **73** |
+
+Group sizes: `free-mode` 44 deployments (31 distinct — 13 are alt-key duplicates) · `free-mode-large` 15 (12) · `free-mode-tools` 10 (7) · `free-mode-fast` 9 (8) · `free-HighTPS_Context` 2 · `true-free-tools` 3 · `true-free-tools-fast` 3 · `ROCKETSPEED-FREE` 5 · `paid-mode` 25 (19) · `paid-mode-fast` 6 · `paid-mode-large` 6.
+
+All six added deployments are present with the intended weights: `nemotron-3-ultra-550b-a55b:free` twice at weight 5, `ernie-5.5-flash-preview:free` at 4, `north-mini-code:free` at 3 in `free-mode` and `free-mode-fast`, `flint-v1.0:free` at 2, `lfm-3-1.7b:free` at 1, `qwen3.8-27b` at 4/3 in `free-mode` and 4 in `free-mode-fast`.
+
+### 12B. Coverage against the audit's free catalogs
+
+Percentages are deliberately absent: the audit stored a 10-model sample per provider, not the whole catalog, so a "0/8" can just mean the sample was alphabetical and the gateway maps different models.
+
+| Provider | Free models mapped | Gaps worth closing |
+|---|---|---|
+| **OpenRouter `:free`** | 7 of the 10 sampled | `thinkingmachines/inkling-2-small:free`, `dots-studio/dots-3-note-preview:free`, `liquid/lfm-2.5-2.6b:free` — all unprobed |
+| **Cohere (trial)** | 1 (`command-r7b-12-2024`) | **`command-a-03-2025` was verified HTTP 200 in §11A and is still unmapped** — the largest single miss |
+| **Gemini free tier** | `2.5-flash`, `2.5-flash-lite`, `3.1-flash-lite`, `3-flash-preview`, `3.1-pro-preview`, `2.5-pro`, `3.8-flash`, `gemma-4-26b-a4b-it` | `gemini-flash-latest`, `gemini-flash-lite-latest` aliases; `gemma-4-31b-it` stays parked (16k TPM) |
+| **Groq** | `gpt-oss-20b`, `gpt-oss-120b`, `qwen3.8-27b`, `llama-3.1-8b-instant` | `gpt-oss-safeguard-20b`, `qwen3.6-27b`, `allam-2-7b` (the rest of the 11-model catalog is guards/whisper, not chat) |
+| **Mistral** | `mistral-small-latest` ×3, `open-mistral-nemo` | `ministral-3b-latest` (verified 0.42 s in §11A), `ministral-8b/14b` |
+| **Cerebras / SambaNova / ModelScope / HuggingFace / DeepInfra / Together / Fireworks** | — | none: providers are disqualified in §11B, so adding their models would just add dead slots |
+
+### 12C. Dead deployments still occupying free slots (verified now)
+
+`groq/llama-3.1-8b-instant` returns **HTTP 404 "does not exist"** today — and it is still mapped **5 times** (`free-mode` ×2, `free-mode-tools` ×2, `hybrid-model` ×1). Combined with the §11B verdicts, **17 of the free-group deployments point at providers this audit proved dead**:
+
+| Upstream | Live result | Slots |
+|---|---|---|
+| `groq/llama-3.1-8b-instant` | 404 model does not exist | 5 |
+| GitHub Models `gpt-4o-mini` | endpoint retired | 5 |
+| Fireworks `kimi-k2p5` | 412 account suspended | 3 |
+| Together `Meta-Llama-3-8B-Instruct-Lite` | 401 Unauthorized | 3 |
+| Cerebras `llama3.1-8b` | 402 payment required | 1 |
+
+That is why "44 free deployments" overstates the pool: every request that lands on one of these burns a retry and a cooldown before the router reaches a live upstream.
+
+### 12D. Tool support on the new models (new measurement)
+
+Sent a real `get_weather` tool schema to each: three of the five call it, two do not.
+
+| Model | Result | Latency |
+|---|---|---|
+| `cohere/north-mini-code:free` | **tool_calls returned** | 0.15 s |
+| `liquid/lfm-3-1.7b:free` | **tool_calls returned** | 0.18 s |
+| `recursive/flint-v1.0:free` | **tool_calls returned** | 5.68 s |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | text only, **no tool_calls** | 0.29 s |
+| `baidu/ernie-5.5-flash-preview:free` | HTTP 429 provider rate limit at that moment | 0.41 s |
+
+None of the three tool-capable models is in `free-mode-tools`, which is exactly the group agent frameworks use for parallel tool calls.
+
+### 12E. Final suggestions, ranked
+
+1. **Delete the 17 confirmed-dead free-group deployments** (12C). They are pure latency: a 404/401/402 still costs a retry cycle. This is the highest-value cleanup and needs no new keys.
+2. **Add `cohere/command-a-03-2025`** — verified working in §11A, still unmapped. It is a stronger Cohere model than the `command-r7b` the gateway only has today.
+3. **Add `north-mini-code`, `lfm-3-1.7b` and `flint-v1.0` to `free-mode-tools`** (12D). They returned real `tool_calls`; the group has 4 of its 10 slots tied up by dead upstreams, so this is a straight swap.
+4. **Keep `nemotron-3-ultra-550b-a55b` out of `free-mode-tools` and `free-HighTPS_Context`.** It returns no tool calls, and `free-HighTPS_Context` declares `supports_function_calling: true` — adding it would break that contract. Its place is `free-mode`/`free-mode-large` at weight 5, which is where it now sits.
+5. **Prefer rolling Gemini aliases** (`gemini-flash-latest`, `gemini-flash-lite-latest`) over pinned versions, so the next model retirement does not silently leave a 404 in the pool the way `gemma-4-31b-it` and `gemma-4-26b` did.
+6. **Add `ministral-3b-latest` to `free-mode-fast`** — verified 0.42 s and Mistral currently contributes only `mistral-small`.
+7. **Give `free-mode-large` a second 1M-context option.** It has 15 deployments but only one true 1M model; the rest are 128k–1M Gemini variants at rpm 1–15.
+8. **Put a watchdog on `/health/liveliness`.** Today's `paid-mode` outage was a wedged process holding the port with a healthy-looking PID (§11F companion doc); a health probe returning 000 should trigger a restart, not a retry.
+9. **Respect the shared `:free` quota when adding more OpenRouter models.** Seven free mappings now share one 1,000 requests/day pool; each addition dilutes the per-model budget, so add only what beats `flint-v1.0` on the same payload.
+10. **Do not treat `ernie-5.5-flash-preview`'s 429 as a dead route.** It is a provider-side throttle on the free tier; it stays low-weight (4) in `free-mode` and should not be promoted to a latency-critical group.
+
+Nothing above has been applied — this section is the recommendation set, not a changelog.
