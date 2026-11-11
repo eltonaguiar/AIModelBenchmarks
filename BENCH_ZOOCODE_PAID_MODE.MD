@@ -1,5 +1,5 @@
 
-# BENCH_MODEL_PERFORMANCE_SUMMARY.MD
+# BENCH_ZOOCODE_PAID_MODE.MD
 
 **Agent:** Zoo (Claude-based, VS Code Code mode) · **Date:** 2026-11-11 · **Host:** Ubuntu ARM64 NVIDIA GB10 class (121 GiB unified memory), plus desktop RTX 5070 12GB
 
