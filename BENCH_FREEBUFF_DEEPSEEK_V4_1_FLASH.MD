@@ -275,6 +275,7 @@ Method: mapped each LLM label in the private key file to its provider endpoint (
 | **Nous Research** | Label says "USE ONLY FREE MODELS", but the probe returned `cost: 3.24e-05` with `cost_details.source: openrouter_cost_floor` — **it bills at OpenRouter floor rates**. Not free, and the label is misleading |
 | **Hugging Face** | Probe worked but `estimated_cost` was charged; free Inference Provider credits were removed in Oct 2026. Metered |
 | **DeepInfra** | Probe worked, `estimated_cost 2.8e-06`. Metered, no recurring free allowance |
+| **Featherless** | Subscription only (chat $25/mo, developer $50 credits/mo). The 22,554-model catalog is readable but **nothing is callable without a paid plan** — not a free tier, and no probe was possible |
 | **SiliconFlow** | `HTTP 401 Token is invalid`. Its free models (xing4.0-29b-a4b, qwen3-8b, glm-4-9b…) need mainland-China real-name verification plus a ¥14 signup credit — one-time **and** geo-restricted |
 | **ModelScope** | `HTTP 401 invalid token` on DeepSeek V4.1 Flash, despite a 6M-token/day free allowance being reported. Unusable credential |
 | **Together** | `HTTP 401 Unauthorized`; no free tier (trial credit discontinued) |
@@ -309,4 +310,4 @@ Method: mapped each LLM label in the private key file to its provider endpoint (
 - **Nous** label instructs "free models only" but the gateway prices every call — a policy label, not a $0 guarantee.
 - Two labels in the file are not keys (`QWEN_API_URL`, and the Ollama-cloud slot), and **Brave/Tavily/Exa/Firecrawl** search keys are outside this audit's scope but separately known to be broken or capped.
 
-**Bottom line:** of 20 LLM providers with a key in the file, **5 offer recurring free capacity that answered today** (Groq, OpenRouter `:free`, Gemini free tier, Mistral, Cohere trial), **1 is blocked on configuration** (Cloudflare), and **14 are disqualified** — mostly because "free" meant a one-time credit that will not come back.
+**Bottom line:** of **28** LLM providers with a key in the file, **5 offer recurring free capacity that answered today** (Groq, OpenRouter `:free`, Gemini free tier, Mistral, Cohere trial), **1 is blocked on configuration** (Cloudflare), and **22 are disqualified** — mostly because "free" meant a one-time credit that will not come back.
