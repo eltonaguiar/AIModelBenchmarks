@@ -291,11 +291,11 @@ Method: mapped each LLM label in the private key file to its provider endpoint (
 
 ### 11C. Free models we already hold but are not routing
 
-1. **`gemma-4-31b-it` and `gemma-4-26b-a4b-it` are free on the Gemini API.** That is a 31B-class, 262K-context, vision-capable model at $0 recurring — currently unused. The strongest single addition found in this audit.
+1. **`gemma-4-31b-it` and `gemma-4-26b-a4b-it` are free on the Gemini API** — 31B-class, 262K context, vision, $0 recurring. Correction (see §11F): `gemma-4-26b-a4b-it` **was already live** in `free-mode`/`free-mode-large` at rpm 15; `gemma-4-31b-it` is in the config but **parked since 2026-11-06** because its free tier caps input at 16k TPM, so real prompts 429. Free is not the same as usable.
 2. **`nemotron-3-ultra-550b-a55b:free`** on OpenRouter (1M context, frontier-scale reasoning) — we only route the two smaller Nemotrons.
 3. **`cohere/north-mini-code:free`** — a code-specialised free model, verified cost 0, distinct from our trial-key Cohere route.
 4. **`baidu/ernie-5.5-flash-preview:free`, `recursive/flint-v1.0:free`, `liquid/lfm-3-1.7b:free`** — 1M-context / small-and-fast free options, all cost 0.
-5. **Groq `qwen3.8-27b`** — our alias `XX_groq` points at `groq/qwen/qwen3.8-27b`, which is a **free-plan model**. Same for `XX_gemini` (`gemini-2.5-flash` free tier). Two aliases we treat as probes are already $0.
+5. **Groq `qwen3.8-27b`** — `XX_groq` already pointed at this free-plan model and `XX_gemini` at `gemini-2.5-flash` (free tier), so both were $0 but reachable only as direct aliases: no rotation group could select them. §11F promotes the Groq one into `free-mode`/`free-mode-fast`.
 
 ### 11D. Not in the credential file — new recurring-free options worth a signup
 
@@ -311,3 +311,23 @@ Method: mapped each LLM label in the private key file to its provider endpoint (
 - Two labels in the file are not keys (`QWEN_API_URL`, and the Ollama-cloud slot), and **Brave/Tavily/Exa/Firecrawl** search keys are outside this audit's scope but separately known to be broken or capped.
 
 **Bottom line:** of **28** LLM providers with a key in the file, **5 offer recurring free capacity that answered today** (Groq, OpenRouter `:free`, Gemini free tier, Mistral, Cohere trial), **1 is blocked on configuration** (Cloudflare), and **22 are disqualified** — mostly because "free" meant a one-time credit that will not come back.
+
+### 11F. Correction and what was actually wired in (2026-11-11)
+
+Cross-checking §11C against `litellm_config.yaml` (the config behind `localhost:4000/v1`) showed two of the five bullets above were wrong. They are corrected in place, and the rest is now wired.
+
+| §11C claim | Reality in `litellm_config.yaml` |
+|---|---|
+| `gemma-4-31b-it` free and unused | Present but **parked 2026-11-06** — free tier allows only 16k input TPM, so real prompts 429. `gemma-4-26b-a4b-it` **was already live** in `free-mode` and `free-mode-large` at rpm 15 |
+| `nemotron-3-ultra-550b:free` unused | Correct — absent. Now added |
+| `cohere/north-mini-code:free` unused | Correct — absent. Now added |
+| `ernie-5.5-flash`, `flint-v1.0`, `lfm-3-1.7b` unused | Correct — absent. Now added |
+| `XX_groq` already free | True, but only as a single-deployment direct alias; no rotation group could pick it. Promoted into `free-mode` and `free-mode-fast` |
+
+**Added:** the five OpenRouter `:free` models to `free-mode`; `north-mini-code`, `flint-v1.0` and `lfm-3-1.7b` also to `free-mode-fast`; `nemotron-3-ultra-550b` to `free-mode-large` (1M context); `groq/qwen/qwen3.8-27b` on both Groq keys to `free-mode` and `free-mode-fast`. Each OpenRouter entry carries `provider.max_price {prompt: 0, completion: 0}`, the same $0 guard `free-HighTPS_Context` uses, so a mistagged `:free` cannot bill.
+
+**Priority** is expressed as `weight`, because `routing_strategy: simple-shuffle` ignores list order and gives unweighted deployments an equal share: 5 `nemotron-3-ultra-550b` (1M ctx, ~5 s), 4 `ernie-5.5-flash` and `qwen3.8-27b`, 3 `north-mini-code` (code, 0.21 s), 2 `flint-v1.0`, 1 `lfm-3-1.7b`.
+
+**Verified through LiteLLM, not just upstream** — a scratch proxy on `:4100` with one single-deployment alias per model, so this exercises the provider adapter and the `max_price` guard: nemotron-ultra 200/3.33 s, ernie 200/2.26 s, north-mini-code 200/0.39 s, flint 200/1.09 s, lfm-3 200/0.40 s, qwen3.8-27b 200/0.22 s. Production restart afterwards: `health` 200, `keys loaded: 54 / 54`, one listener, and `free-mode` 6/6, `free-mode-fast` 3/3, `free-mode-large` 1/1, `true-free-tools` 1/1, `true-free-tools-fast` 1/1.
+
+**One caution this created:** `x-litellm-response-cost` is list price, not an invoice. The five OpenRouter routes report no cost, while `groq/qwen3.8-27b` reports `2.32e-05` per call even on the free plan. Do not use that header as proof of $0 — it is the same trap as the `gemma-3.1-flash-lite` case noted in §9, just in the opposite direction.
