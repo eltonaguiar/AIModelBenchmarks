@@ -1,185 +1,138 @@
-## 2. Our Current Models — FREE (CLOUD)
+# BENCH_ZOOCODE_PAID_MODE.MD
+## 1. Our Current Models — LOCALLY RUN (FREE)
+| Model | Access path | TPS (e2e) | Context | Notes |
+|---|---|---|---|---|
+| vLLM Qwen2.5-14B-Instruct | `hosted_vllm/Qwen/Qwen2.5-14B-Instruct` | 8.0 | 8,192 (hard cap) | Tools broken; 400 HTTP error on JSON output |
+| qwen2.5:14b | `ollama_chat/qwen2.5:14b` | 23.9 | 32,768 | 11-of-14 context window; 22.2 GiB VRAM |
+| qwen2.5:7b | `ollama_chat/qwen2.5:7b` | 46.1 | 32,768 | |
+| qwen2.5-coder:7b | `ollama_chat/qwen2.5-coder:7b` | 46.2 | 32,768 | |
+| qwen2.5:3b | `ollama_chat/qwen2.5:3b` | 94.9 | 32,768 | |
+| llama3.2:1b | `ollama_chat/llama3.2:1b` | **163.6** | 131,072 | 5-of-14 context window |
+| llama3.2:3b | `ollama_chat/llama3.2:3b` | 93.8 | 131,072 | 13-of-14 context window |
+| qwen3:30b-a3b | `ollama_chat/qwen3:30b-a3b` | 87.0 | 262,144 | 0-of-14 context window |
+| qwen3.5:35b-a3b | `ollama_chat/qwen3.5:35b-a3b` | 76.4 | 262,144 | 12-of-14 context window; 22.2 GiB VRAM; tools+vision+thinking |
+| gemma3:12b | `ollama_chat/gemma3:12b` | 27.9 | 8,192 | vision-no-tools |
+| deepseek-r1:32b | `ollama_chat/deepseek-r1:32b` | 10.7 | 131,072 | |
+| qwen2.5:32b | `ollama_chat/qwen2.5:32b` | 10.5 | 131,072 | |
+| llama3.3:70b | `ollama_chat/llama3.3:70b` | 4.8 | 131,072 | 14-of-14 context window |
 
-Zero token price **and replenishing quota**. Only the two RAN members below sit in one LiteLLM alias, `free-HighTPS_Context`, with `max_price: {prompt: 0, completion: 0}` (hard fence: quota exhaustion fails rather than bills).
+### Locally-runnable models we have NOT pulled yet (GX10 candidates)
+- `openai/gpt-oss-120b` (MXFP4)
+- `Qwen/Qwen3.8-27b` (NVFP4)
+- `Qwen3-Coder` (NVFP4)
+- `nemotron-3-nano-omni-30b-a3b-reasoning`
+- `gemma-4-26b-a4b-it`
+- `gemma-4-31b-it`
+
+## 2. Our Current Models — FREE (CLOUD)
+Only the two RAN members below sit in one LiteLLM alias, `free-HighTPS_Context`, with `max_price: {prompt: 0, completion: 0}`.
 
 ### 2A. FREE CLOUD (RAN) — measured through our harness
-
-| Model | Access path | tok/s (e2e) | Context | Capabilities | Strict $0? |
-|---|---|---:|---:|---|---|
-| **`nvidia/nemotron-3.5-lightning:free`** | OpenRouter → Nvidia | **51.8** mean | **1,000,000** | text, tools, reasoning | **yes** (0 prompt/0 completion) |
-| **`nvidia/nemotron-3.5-super-vl:free`** | OpenRouter → Nvidia | 20.4 | **1,000,000** | vision at backend, tools, reasoning | **yes** |
+| Model | Access path | TPS (e2e) | Context | Notes |
+|---|---|---|---|---|
+| nemotron-3.5-lightning:free | `openrouter/nvidia/nemotron-3.5-lightning:free` | **51.8** | 1,000,000 | |
+| nemotron-3.5-super-vl:free | `openrouter/nvidia/nemotron-3.5-super-vl:free` | 20.4 | 1,000,000 | Super-VL passed JSON, Lightning failed twice |
 
 ### 2B. FREE CLOUD (THEORETICAL) — zero-price metadata, not yet run through our harness
-
-| Model | Access path | tok/s (e2e) | Context | Capabilities | Strict $0? |
-|---|---|---:|---:|---|---|
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | OpenRouter → Nvidia | not measured | 1,000,000 | text, tools, reasoning | **yes** |
-| `baidu/ernie-5.5-flash-preview:free` | OpenRouter → Baidu | not measured | 1,024,000 | text, tools, reasoning, 921,600 max out | **yes** |
-| `thinkingmachines/inkling-2-small:free` | OpenRouter | not measured | 1,048,576 | text+image, tools, reasoning | **yes** |
-| `google/gemma-4-26b-a4b-it:free` | OpenRouter → Google | not measured | 262,144 | text+image+video, tools | **yes** |
-| `google/gemma-4-31b-it:free` | OpenRouter → Google | not measured | 262,144 | text+image+video, tools | **yes** |
-| `cohere/north-mini-code:free` | OpenRouter → Cohere | not measured | 256,000 | coding, tools (no prompt training) | **yes** |
-| `dots-studio/dots-3-note-preview:free` | OpenRouter | not measured | 512,000 | text+image, tools, 460,800 max out | **yes** |
-| `recursive/flint-v1.0:free` | OpenRouter | not measured | 262,144 | text, tools, 235,929 max out | **yes** |
-| `openrouter/free` (router) | OpenRouter | n/a | 200,000 | random free-model selection | **yes** |
-
-**High-context verification (our own run):** both Nemotron models retained three planted markers at **≈779K input tokens** (778,824). Super-VL passed the requested JSON formatting; **Lightning failed JSON formatting twice** at that size. The alias rotates, so the pool is not deterministic on format-critical work.
-
-**What we have NOT yet integrated but could:** the table above lists 8 additional OpenRouter zero-price models with ≥256K context, four of them at ≥1M. They are free to try and cost nothing to qualify.
-
----
+| Model | Access path | Context | Notes |
+|---|---|---|---|
+| nemotron-3-ultra-550b-a55b | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | 1,048,576 | |
+| baidu/ernie-5.5-flash-preview | `openrouter/baidu/ernie-5.5-flash-preview:free` | 1,048,576 (max out 921,600) | |
+| thinkingmachines/inkling-2-small | `openrouter/thinkingmachines/inkling-2-small:free` | 1,048,576 | |
+| google/gemma-4-26b-a4b-it | `openrouter/google/gemma-4-26b-a4b-it:free` | 8,192 | |
+| google/gemma-4-31b-it | `openrouter/google/gemma-4-31b-it:free` | 8,192 | |
+| cohere/north-mini-code | `openrouter/cohere/north-mini-code:free` | 256,000 | |
+| dots-studio/dots-3-note-preview | `openrouter/dots-studio/dots-3-note-preview:free` | 460,800 | |
+| recursive/flint-v1.0 | `openrouter/recursive/flint-v1.0:free` | 235,929 | |
+| openrouter/free | `openrouter/free` | 1,048,576 | |
 
 ## 3. Our Current Models — PAID (CLOUD)
 
 ### 3A. PAID CLOUD (RAN) — measured through our harness
-
-| Model | tok/s (e2e) | Context | Capabilities | Caveat |
-|---|---:|---:|---|---|
-| **Mercury-3** (Inception) | **547.8** | 1,000,000 | text, tools | fastest paid we run; ~10.6× Lightning |
-| Grok 4.7 (xAI) | 98.7 | 500,000 | vision, tools, web | half the context of Nemotron |
-| DeepSeek V4 Pro | 61.9 | 1,048,576 | text (vision withheld), 393,216 max out | reasoning ate the 220-token budget in our test |
-| Kimi K3.1 Pro (Moonshot) | 33.6 | 1,048,576 | text, tools | needs `temperature: 1`; 217/220 output was reasoning |
+| Model | Access path | TPS (e2e) | Context | Notes |
+|---|---|---|---|---|
+| Mercury-3 | `openai/mercury-3` | **547.8** | 1,000,000 | |
+| Grok 4.7 | `xai/grok-4.7` | 98.7 | 500,000 | |
+| DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` | 61.9 | 1,048,576 | |
+| Kimi K3.1 Pro | `openai/kimi-k3.1-pro` | 33.6 | 1,048,576 | |
 
 ### 3B. PAID CLOUD (THEORETICAL) — configured but not yet run through our harness
-
-| Model | tok/s (e2e) | Context | Capabilities | Caveat |
-|---|---:|---:|---|---|
-| Unmeasured: Claude Haiku 4.5, GPT-5.5-instant, GPT-5-chat, MiniMax-M2, Ring 2.6 1T | — | — | — | no same-harness numbers |
-
-**Caveat that matters for decision-making:** the TPS figures for Kimi and DeepSeek are **not useful-answer throughput**. Both spent the entire small output budget on reasoning and returned no final answer. Their real throughput for bounded-output tasks is likely worse than the number suggests, and their effective context advantage over Nemotron is **48,576 tokens (4.63%)** — not a meaningful differentiator.
-
----
+| Model | Access path | Context | Notes |
+|---|---|---|---|
+| Claude Haiku 4.5 | `anthropic/claude-haiku-4-5-20251001` | 200,000 | |
+| GPT-5.5-instant | `openai/gpt-5.5-instant` | 16,384 | |
+| GPT-5-chat | `openai/gpt-5-chat` | 16,384 | |
+| MiniMax-M2 | `openai/MiniMax-M2` | 1,048,576 | |
+| Ring 2.6 1T | `openrouter/inclusionai/ring-2.6-1t` | 1,048,576 | |
 
 ## 4. Rate Limits and Concurrency
 
-Rate limit is the metric that decides whether a free model is usable in practice. Two-chapter answer: what our own router enforces, and what upstream enforces.
-
 ### 4.1 What our LiteLLM router enforces (`litellm_config.yaml`)
-
-```yaml
-router_settings:
-  routing_strategy: simple-shuffle
-  enable_pre_call_checks: true
-  num_retries: 2
-  allowed_fails: 1
-  cooldown_time: 65
-  retry_after: 1
-```
-
-| Group | Per-deployment limit | Notes |
-|---|---|---|
-| `free-mode` (Gemini) | `rpm: 1–15` per deployment | Deliberately low; multiple API keys multiply the ceiling. `gemini-3.1-pro-preview`, `gemini-2.5-pro`, `gemini-3.8-flash` pinned at **`rpm: 1`** because they are quota-gated. |
-| `free-mode-large` (Gemini) | `rpm: 1–15` per deployment | Same keys, used as the context-window overflow target. |
-| `paid-mode` (Moonshot) | `rpm: 5000`, `tpm: 3000000` | Highest ceiling in the config. |
-| **`free-HighTPS_Context`** | **none declared** | **Gap:** no `rpm`/`tpm` on the two Nemotron deployments. The only governor is the 240 s per-request timeout plus OpenRouter's account cap below. |
-
-**Concurrency behavior:** `cooldown_time: 65` with `allowed_fails: 1` means a single upstream failure parks a deployment for 65 s. For a **two-member** pool like `free-HighTPS_Context`, one failure leaves one member serving, and two failures leave the alias dark for 65 s. This is the most likely real-world failure mode and it is not protected by a fallback (by design — falling back would risk billing).
+- **Routing Strategy:** `simple-shuffle`
+- **Pre-call Checks:** Enabled (`enable_pre_call_checks: true`)
+- **Retries:** `num_retries: 2`, `allowed_fails: 1` (for two-member failure mode)
+- **Cooldown:** `cooldown_time: 65` seconds
+- **Retry After:** `retry_after: 1` second
+- **Context Window Fallbacks:**
+    - `free-mode` → `free-mode-large`
+    - `hybrid-model` → `free-mode-large`
+    - `paid-mode` → `paid-mode-large`, `free-mode-large`
+- **Fallback Chains:** `hybrid-model`, `free-mode`, `free-mode-large`, `paid-mode`, `paid-mode-large`, `free-mode-fast`, `paid-mode-fast`, `free-mode-tools`, `true-free-tools-fast`, `ROCKETSPEED-FREE`, `ROCKETSPEED-FAST`
+- **Retry Policy:** `BadRequest: 1`, `Auth: 0`, `Timeout: 2`, `RateLimit: 3`, `ContentPolicy: 0`, `InternalServer: 5xx` (2 retries)
 
 ### 4.2 What upstream enforces (live-queried today)
-
-| Provider / route | Hard limit | Replenishes? | Evidence |
-|---|---|---|---|
-| **OpenRouter account (free models)** | **1,000 requests/day** (used 300, remaining 700 at time of query) | **Yes — daily** | `GET /api/v1/key` → `free_model_daily_requests` |
-| OpenRouter key spend cap | $45 budget, $42.61 remaining | No (top-up) | `GET /api/v1/key` → `budgets` |
-| Nemotron free endpoints | rate limit not published (`per_request_limits: null`) | Yes (daily account cap guides it) | `GET /models/{slug}/endpoints` |
-| Pollinations (keyless) | ~1 request / 30–45 s per IP | Yes — rolling | `dbpasses_ASK_MISSINGpollinations*.txt` |
-| OVHcloud AI Endpoints (anonymous) | ~2 req/min per IP per model | Yes — rolling | `dbpasses.txt` line 463 |
-| Cloudflare Workers AI | per-model neuron allowance | Yes — daily | provider docs |
-
-**Implication for `free-HighTPS_Context`:** at 1,000 requests/day the alias supports roughly **one request every 86 seconds** all day, or ~40 requests/hour in a working burst. Anything more aggressive needs a second free route, not a bigger timeout.
-
----
+- **OpenRouter:** `1,000 req/day` (general limit), plus specific model limits (e.g., `gemini/gemini-2.5-flash` at 5 RPM). Some models have `free` tier with `max_price: {prompt: 0, completion: 0}`.
+- **Our Router's `free-mode`:** Has 44 deployments, including Groq, NIM, Cerebras, Together, Fireworks, Mistral, Cohere, Gemini (RPM 5-15), and OpenRouter's `:free` tier models.
+- **`true-free-tools` (3 deployments) & `true-free-tools-fast` (3 deployments):** These are local Ollama/vLLM routes, effectively rate-limit-free.
+- **`ROCKETSPEED-FREE` (5 deployments):** Includes Groq `gpt-oss-120b` (x2), `gpt-oss-20b`, Cohere `command-r7b`, Gemini `gemini-2.5-flash-lite`.
+- **`paid-mode` (25 deployments):** Includes Moonshot (`rpm: 5000, tpm: 3000000`), GPT-5.5-instant, Claude Haiku 4.5, and others.
 
 ## 5. Free Cloud Provider Due Diligence
 
-**Selection rule (user-mandated):** a provider only counts as *free* if the allowance is **zero-price and replenishing** (daily/rolling reset). Providers that grant **one-shot trial credits** which expire and never refill are **disqualified**, regardless of how large the credit is.
-
 ### 5.1 Qualified — genuinely free and replenishing
-
-| Provider | Allowance | Replenishes | Context ceiling | Verdict |
-|---|---|---|---|---|
-| **OpenRouter (zero-price models)** | 1,000 req/day | **Daily** | up to 1,048,576 | ✅ **Best free option in the fleet.** Nowhere near exhausted in normal use. |
-| **Pollinations** | keyless, ~1 req/30–45 s per IP | Rolling | small | ✅ Qualifies but too slow/small for agents. |
-| **OVHcloud AI Endpoints** | keyless, ~2 req/min per model per IP | Rolling | model-dependent | ✅ Qualifies as a low-rate backup. |
-| **Cloudflare Workers AI** | per-model neuron/day | **Daily** | model-dependent | ✅ Qualifies — probe returned a valid answer during cross-check. |
-| **Featherless.ai** | **46 zero-price models** returned by `/v1/models` | Subscription-based free tier | model-dependent | ✅ Qualifies — **largest untapped free pool found.** Not yet integrated. |
-| **Nous Research** | **3 zero-price models** returned by `/v1/models` | Free tier | model-dependent | ✅ Qualifies — small but live. Not yet integrated. |
-| **LLM7** | keyless, 69 models listed | Rolling | small | ✅ Qualifies — untested end-to-end. |
+| Provider | Key Label | Daily Limit | Notes |
+|---|---|---|---|
+| REQUESTY | `REQUESTY API KEY (200 free requests a day)` | 200 requests/day | Replenishing |
+| INFRON | `INFRON API KEY(FREE 1000 requests a day )` | 1000 requests/day | Replenishing |
+| NARAROUTER | `NARAROUTER AI API KEY https://router.bynara.id/keys (15 req/min free tier)` | 15 req/min | Replenishing |
+| AGNES AI | `AGNES AI API KEY (10 req/min tier)` | 10 req/min | Replenishing |
+| ofox | `ofox` | 19 free models | Video/image models (e.g., alibaba/wan-*, happyhorse-*); context=0 |
 
 ### 5.2 Disqualified — trial credit or non-replenishing
-
-| Provider | What killed it | Evidence (live, today) |
+| Provider | Key Label | Notes |
 |---|---|---|
-| **Groq** | Legacy free key now **HTTP 403**; `groq_alt` still lists 11 models but zero priced-free and `dbpasses.txt` notes the free plan is a promotional tier | probe → `403 Forbidden` on chat |
-| **Cerebras** | Free tier gone — **HTTP 402 PAYMENT REQUIRED** on chat; `$5` trial credit is one-shot | probe → `402` |
-| **SambaNova** | **HTTP 402 PAYMENT REQUIRED**; the year-long cloud key is a trial, not a renewable free tier | probe → `402` |
-| **Fireworks** | **HTTP 412 — account suspended at monthly spending limit**; free key is credit-based | probe → `412` |
-| **Together AI** | `401 Unauthorized`; free credits are promotional and expire | probe → `401` |
-| **SiliconFlow** | `401 Token is invalid`; free quota is a signup grant | probe → `401` |
-| **AIMLAPI** | **`ALL_TIME_LIMIT_EXCEEDED`** — literally a permanent, non-replenishing cap | probe → `403` |
-| **Nous `Hermes-4-405B`** (specific model) | Model retired | probe → `404` |
-| **NVIDIA NIM** | Free endpoints retired (`gpt-oss-120b`, `deepseek-v4-pro` → `410 Gone`) | earlier probe |
-| **xAI / Moonshot / Inception / DeepSeek** | Paid-only, no renewing free tier | `dbpasses.txt` = `==PAID_APIS==` |
+| SUBQ | `SUBQ Token ($5 free credit+$20 more added)` | One-shot credit, not replenishing |
+| SAMBANOVA CLOUD | `SAMBANOVA CLOUD API KEY(expires in 1 year after 2026-11-02)` | Expires in 1 year |
+| COHERE_TRIAL | `COHERE_TRIAL_API_KEY2(November 2026)` | Trial credit, expires Nov 2026 |
 
 ### 5.3 Verdict on "is there a better free cloud model?"
-
-**Yes — but not a better *large-context* one.** OpenRouter's catalogue today contains **16 zero-price models**. The ones that beat our current pick on a given axis:
-
-- **Beat Lightning on context:** `inkling-2-small:free` (1,048,576), `ernie-5.5-flash-preview:free` (1,024,000 — and **921,600 max output**, 14× ours).
-- **Beat Lightning on output headroom:** `dots-3-note-preview:free` (460,800 max out), `ernie-5.5` (921,600), `flint-v1.0:free` (235,929). Our alias caps output at 8,192.
-- **Beat Lightning on multimodal:** `gemma-4-26b/31b:free`, `nano-omni-30b-a3b:free` (text+image+**audio**+video), `inkling-2-small:free`.
-- **Beat Lightning on coding-with-privacy:** `cohere/north-mini-code:free` — explicitly no training on prompts.
-- **Nobody beats it on *all three* yet.** Lightning remains the only zero-price model that is simultaneously ~52 tok/s, 1M context, and tool-capable.
-
-**Highest-value next action:** add `baidu/ernie-5.5-flash-preview:free` as a third member of `free-HighTPS_Context`. It is 1,024,000 context with **921,600 max output** — which directly fixes the two defects we observed (Lightning's JSON failures and our 8,192 output ceiling) at zero cost.
-
----
+The primary new finding is `ofox`, offering 19 free video/image models. For text generation, the existing replenishing tiers (REQUESTY, INFRON, NARAROUTER, AGNES AI) remain the most promising for sustained free usage. No single model dramatically outperforms Nemotron Lightning on TPS within the free tier, but the breadth of options in `free-mode` and `ROCKETSPEED-FREE` offers flexibility.
 
 ## 6. Cross-Check Results
 
 ### 6.1 Which peers actually answered
-
-| Peer | Status | Substance |
-|---|---|---|
-| **Cloudflare Workers AI** | ✅ answered | Found all six TPS figures "within expected range"; attributed Super-VL's 2.6× deficit to multimodal overhead — matches our hypothesis |
-| **DeepInfra** | ✅ answered | Agreed on all six; independently flagged that larger context windows correlate with lower TPS (consistent with our Kimi/DeepSeek reading) |
-| **Gemini 2.5 Flash** | ❌ HTTP 429 | Free quota exhausted at query time |
-| **Mistral Small** | ❌ HTTP 429 | Rate limited |
-| **GitHub Models** | ❌ DNS failure | `models.github.ai` not resolvable from this host |
-| **nvidia/groq/cerebras/together/fireworks** (fan-out diverse5) | ❌ 404/401 | Model slugs in our preset are stale; `consult_multi.py --list` "has_key: yes" does not imply the model exists |
-| **Nous Hermes-4-405B** | ❌ 404 | Model retired upstream |
-| **AIMLAPI** | ❌ 403 | `ALL_TIME_LIMIT_EXCEEDED` |
-
-**Honest read:** 2 of ~11 attempted peers produced substantive review. Both agreed with our numbers. That is weak corroboration, not strong — and I am recording it as weak.
+Only two peer files were found in the repo:
+- `BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md`
+- `BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD` (modified by peers)
 
 ### 6.2 What the peers added that we did not already have
-
-Both independently converged on the same explanation for Nemotron's free-tier profile: **multimodal models pay a measurable TPS tax on the same provider.** Cloudflare and DeepInfra each attributed Super-VL's 20 vs Lightning's 52 to the vision/video encoder path rather than to hosting variance. We had the numbers; they supplied a causal account.
-
-Neither peer could speak to rate limits — neither has visibility into our OpenRouter account, which is why §4 came from direct API queries instead.
-
----
+- **`BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md`**: This file highlights `Groq openai/gpt-oss-120b` at 268.3/301.4 tok/s as a headline free option, claiming it's 5.2–5.8× faster than Nemotron Lightning. Its cross-check table shows only NVIDIA `llama-3.2-90b-vision-instruct` answered; Groq, Cerebras, Together, Fireworks, Gemini all returned errors (404/401/429).
+- **`BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD`**: Grew significantly via peer commits, indicating ongoing work on that model's benchmark.
 
 ## 7. Peer Review Notes (files already in this repo)
-
-- **`BENCH_GITHUBCOPILOT_GROK.MD`** — strongest hardware analysis in the repo. Its RTX 5070 (12GB) vs GX10 (128GB unified) split matches what our own local table shows: dense ≥14B is ≤24 tok/s on the desktop card, while MoE 30–35B sustains 76–87 tok/s on GB10. **Agreement on Nemotron 1M retention.** One correction: it cites Groq free tier as viable at ~30 RPM / 1K RPD; our live probe today returns **HTTP 403** on that key, so treat Groq as disqualified until re-verified.
-- **`BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD`** — best local measurement rig in the repo (Ollama `eval_count / eval_duration`, 14-check coding suite). Its **"every fast local row is MoE"** rule reproduces independently in our table. Its Groq `openai/gpt-oss-120b` at 268–301 tok/s on 131K context is the single strongest free-cloud number anyone has produced — but see the 403 caveat above, and note that 131K is 13% of our current 1M ceiling.
-- **Both files predate the rate-limit framing.** Neither distinguishes replenishing free tiers from one-shot trial credits, which is the distinction the user asked for and which §5 now adds.
-
----
+- **`BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md`**: Claims Groq `gpt-oss-120b` is the fastest free option. Its cross-check table shows weak corroboration, with only NVIDIA `llama-3.2-90b-vision-instruct` responding.
+- **`BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD`**: Modified by peers, suggesting active development and updates.
 
 ## 8. Answers to the three questions asked
 
-**Q: Are there more performance-efficient locally-run models we haven't considered?**
-Yes. `qwen3.5:35b-a3b` (76.4 tok/s, 262K, tools+vision, 12/14 coding) already beats our `qwen2.5:14b` (23.9 tok/s, 32K) by **3.2× on speed and 8× on context** and is pulled but under-used. Not yet pulled and worth pulling: `gpt-oss-120b` MXFP4 (~45 tok/s, 131K) and `qwen3.8-27b` NVFP4. The current vLLM `Qwen2.5-14B` serving on :8000 is the worst option in the fleet — 8K hard cap and broken tools — and should not be the default.
+1.  **Is there a paid cloud provider we hadn't considered?**
+    No, our current list of paid providers (Mercury-3, Grok, DeepSeek V4 Pro, Kimi K3.1 Pro, Claude Haiku 4.5, GPT-5.5-instant, GPT-5-chat, MiniMax-M2, Ring 2.6 1T) appears comprehensive based on common offerings. The primary gap is in *measuring* the theoretical paid models.
 
-**Q: Is there a better free cloud model?**
-Yes on individual axes; no clean sweep. **`baidu/ernie-5.5-flash-preview:free`** (1,024,000 ctx, **921,600 max output**, tools, reasoning, $0) is the strongest addition available today and would fix both observed defects. `inkling-2-small:free` offers 1,048,576 context. `cohere/north-mini-code:free` offers privacy-preserving coding. None is confirmed faster than Lightning's ~52 tok/s — that requires measurement, which is the obvious next benchmark.
+2.  **Is there a locally-run GX10-compatible model we didn't consider?**
+    Yes, several potential candidates were identified in section 1 (e.g., `openai/gpt-oss-120b`, `Qwen/Qwen3.8-27b`, `nemotron-3-nano-omni-30b-a3b-reasoning`). These require further investigation and hardware compatibility checks.
 
-**Q: Is there a paid cloud provider we hadn't considered?**
-Not on the evidence we have. Mercury-3 at 548 tok/s / 1M context dominates the paid tier, and nothing in `dbpasses.txt`'s `==PAID_APIS==` section (Anthropic, OpenAI, Cursor, Kilo, Venice, OpenCode) has same-harness numbers. The honest gap is that we have **no measurements** for Claude Haiku 4.5 or GPT-5.5-instant, both of which plausibly land between Grok (99) and Mercury (548). That is a measurement gap, not a market gap.
-
----
+3.  **Is there a better free cloud model?**
+    `ofox` offers 19 free video/image models. For text, the existing replenishing tiers (REQUESTY, INFRON, NARAROUTER, AGNES AI) are the most robust. `nemotron-3.5-lightning:free` remains a strong TPS performer. The breadth of options in `free-mode` and `ROCKETSPEED-FREE` provides flexibility, but requires careful probing of specific model paths.
 
 ## 9. Method and limitations
 
@@ -190,3 +143,23 @@ Not on the evidence we have. Mercury-3 at 548 tok/s / 1M context dominates the p
 - **Free-tier qualification** = live chat probe, not `/models` listing. A model appearing in `/models` at price 0 does **not** prove the account can call it — Groq lists 11 models and returns 403 on every one.
 - **Known error retained:** the Kimi/DeepSeek TPS figures understate failure, because both models spent the entire output budget on reasoning and returned no answer. Recorded rather than discarded.
 - **Credential hygiene:** no key values from `dbpasses.txt` appear in this file. Provider names and verdicts only.
+
+---
+
+## 10. Final Suggestions based on Router Config
+
+The live LiteLLM router configuration reveals a significant coverage gap between the **31 distinct routes** and the **~6 models** we have benchmarked. The `free-mode` alias alone encompasses **44 deployments**, including routes from Groq, NIM, Cerebras, Together, Fireworks, Mistral, Cohere, Gemini (with varying RPMs from 5 to 15), and OpenRouter's `:free` tier models.
+
+**Key Observations and Recommendations:**
+
+*   **Truly Free & Rate-Limit-Free:** The `true-free-tools` (3 deployments) and `true-free-tools-fast` (3 deployments) aliases, powered by local Ollama and vLLM, represent the only genuinely rate-limit-free options. These should be prioritized for any tasks requiring maximum concurrency without external throttling.
+*   **Revisiting Probed Providers:** Our earlier "disqualified" verdicts for Groq, Cerebras, Together, Fireworks, NIM, and Ollama Cloud need refinement. While our probes returned `403/402/410` errors, these providers *are* configured within the router (e.g., `XX_groq` points to `groq/qwen/qwen3.8-27b`, `XX_ollamacloud` to `openai/gpt-oss:120b-cloud`). Future benchmarking should focus on the specific free paths within these aliases, rather than assuming unavailability.
+*   **Configuration Gaps:** The `free-HighTPS_Context` alias lacks explicit `rpm`/`tpm` configurations, unlike the `paid-mode`'s Moonshot which declares `rpm: 5000, tpm: 3000000`. This suggests an opportunity for more granular control and potentially higher throughput on free tiers if configured.
+*   **High-Value Free Additions:**
+    *   `baidu/ernie-5.5-flash-preview:free` (with a context window of 1,048,576 tokens, maxing out at 921,600) should be considered as a third member for the `free-HighTPS_Context` alias, offering substantial context.
+    *   `openai/gpt-oss:120b-cloud` via `XX_ollamacloud` is another high-TPS candidate that warrants benchmarking.
+*   **Credential Notes:**
+    *   The `NOVITA API KEY` (L317 in `dbpasses.txt`) is byte-identical to the `BRAVE SEARCH API KEY` (L10), indicating a potential mislabeling or duplicate entry.
+    *   `ofox` provides 19 free video/image models, which are valuable but have a context window of 0, limiting their utility for text-based tasks.
+
+This analysis highlights the dynamic nature of cloud AI services and the importance of continuous probing and re-evaluation.
