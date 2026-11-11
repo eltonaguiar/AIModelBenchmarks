@@ -212,3 +212,22 @@ python3 tools/consult_multi.py --provider groq --model openai/gpt-oss-120b --pro
 ```
 
 Evidence on the host: `reports/local_model_benchmark_2026-11-11.md`, `reports/free_high_tps_context_2026-11-11.json`, `reports/model_bench_three_categories_2026-11-11.json`, `reports/local_candidate_bench_validation_2026-11-11.json`. No credential values appear in this file.
+
+---
+
+## 9. UI and engine layer — what sits in front of the models
+
+Complements §2/§3: the router is not the only path a request can take on this box.
+
+| Layer | What it is | Limits found (measured 2026-11-11) | Consequence |
+|---|---|---|---|
+| **Open WebUI 0.9.5** (:3000, docker) | chat UI + RAG/tool orchestration | `OPENAI_API_BASE_URL` is **empty**; `OLLAMA_BASE_URL=http://192.168.2.52:11434` (that IP **is** this host, `gx10-c9b9`) | **Open WebUI chats bypass LiteLLM entirely.** No fallback, cooldown, RPM accounting or strict-$0 guard applies there, and only Ollama models are selectable |
+| RAG embedding | in-container `sentence-transformers/all-MiniLM-L6-v2` | not our local `nomic-embed-text` | document retrieval is a separate stack from the chat models — not covered by any figure above |
+| **vLLM 0.21.0** (:8000) | GPU inference | `--max-model-len 8192 --gpu-memory-utilization 0.35 --port 8000`; tools broken (HTTP 400) | only ~35% of the 121 GiB unified pool is claimed → the 8K cap and 8 tok/s e2e are a **config ceiling, not a model ceiling** |
+| **Ollama 0.40.13** (:11434) | local runtime | `NUM_PARALLEL=1`, `KEEP_ALIVE=-1`, `FLASH_ATTENTION=1`, `KV_CACHE=q4_0` | inference is **serialized** (one request at a time per model) and loaded models hold RAM indefinitely — 48.6 GB free while models were resident |
+| **LiteLLM** (:4000) | router | repeated non-fatal `This model isn't mapped yet. model=openai/gpt-oss-120b` during model-info lookup; requests still return 200 | cost and context metadata cannot be resolved for that id, so **cost accounting and pre-call context checks are silently unavailable** for it |
+
+Two practical consequences:
+
+1. **Interactive work in Open WebUI is ungoverned.** If $0, fallback policy or rate accounting matter, call :4000 directly rather than the UI.
+2. **vLLM is under-allocated.** At 0.35 utilisation it cannot serve a larger window or a tool parser; raising utilisation and adding `--enable-auto-tool-choice --tool-call-parser` would materially change Category A. We changed nothing here — this is a measured observation, not a recommendation to edit a shared service.
