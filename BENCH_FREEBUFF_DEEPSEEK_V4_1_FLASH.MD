@@ -1,159 +1,214 @@
 # BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH
 
-Author-agent: Freebuff (DeepSeek V4.1 Flash) · Date: **2026-11-11** · Host: Ubuntu ARM64 **NVIDIA GB10** (DGX Spark / ASUS Ascent GX10 class), 121 GiB unified memory, 20 vCPU, 273 GB/s class memory bandwidth.
+Author-agent: Freebuff (DeepSeek V4.1 Flash) · Date: **2026-11-11** · Host: Ubuntu ARM64 **NVIDIA GB10** (DGX Spark / ASUS Ascent GX10 class), 121 GiB unified memory, 20 vCPU, ~273 GB/s memory bandwidth, **62 GB free disk**.
 
-Scope: inventory our fleet by **where the weights run** — locally, free cloud, paid cloud — then answer one question: *are there more performance-efficient models we have not adopted, and in which category?* Metrics: **capabilities, tokens/s, context window**.
+Scope: our fleet split by **where the weights run** — locally / free cloud / paid cloud — plus which **free models are worth pulling onto this box**, how to measure them, and where our **rate-limit** ceilings actually are.
 
-All numbers below are either measured on this host through the fleet's own stack (LiteLLM :4000, vLLM :8000, Ollama :11434) or explicitly cited as third-party. Method is at the bottom.
+Every number is measured on this host through the fleet's own stack unless explicitly marked third-party. Method and limitations: §7.
 
 ---
 
-## 1. Our current models, split by category
+## 1. Our current models, by category
 
 ### 1A. LOCALLY RUN (FREE) — weights on this machine
 
-Warm short-prompt decode rate = Ollama `eval_count / eval_duration`, 220-token cap. Context = declared model context. Coding = 14-check synthetic mini-suite (not a leaderboard).
+Warm short-prompt decode = Ollama `eval_count / eval_duration`; context = declared; coding = 14-check synthetic mini-suite.
 
-| Model (Ollama unless noted) | tok/s | Context | Capabilities | Coding | Weights |
+| Model | tok/s | Context | Capabilities | Coding | Weights |
 |---|---:|---:|---|---:|---:|
 | `llama3.2:1b` | **163.6** | 131,072 | tools | 5/14 | 1.2 GiB |
-| `qwen2.5:3b` | **94.9** | 32,768 | tools, live-fetch PASS | 7/14 | 1.8 GiB |
-| `llama3.2:3b` | 93.8 | 131,072 | tools | 13/14 (fails JSON-key contract) | 1.9 GiB |
+| `qwen2.5:3b` | 94.9 (39–92 across runs) | 32,768 | tools, file read, live-fetch PASS | 7/14 | 1.8 GiB |
+| `llama3.2:3b` | 93.8 | 131,072 | tools | 13/14, JSON-key fails | 1.9 GiB |
 | `qwen3:30b-a3b` | 87.0 | 262,144 | tools, thinking | 0/14 (JSON fails ≥32K) | 17.3 GiB |
 | **`qwen3.5:35b-a3b`** | **76.4** | **262,144** | **tools, vision, thinking** | **12/14**, live-fetch PASS | 22.2 GiB |
 | `qwen2.5-coder:7b` | 46.2 | 32,768 | tools, insert | 9/14 | 4.4 GiB |
 | `qwen2.5:7b` | 46.1 | 32,768 | tools | 8/14 | 4.4 GiB |
-| `gemma3:12b` | 27.9 | 131,072 | vision (no tools) | 10/14 | 7.6 GiB |
-| `qwen2.5-coder:14b` | 24.0 | 32,768 | tools, insert | 10/14 | 8.4 GiB |
+| `gemma3:12b` | 27.9 | 131,072 | vision, no tools | 10/14 | 7.6 GiB |
 | `qwen2.5:14b` | 23.9 | 32,768 | tools | 11/14 | 8.4 GiB |
 | `deepseek-r1:32b` | 10.7 | 131,072 | tools, thinking | 0/14 | 18.5 GiB |
 | `qwen2.5:32b` | 10.5 | 32,768 | tools | 9/14 | 18.5 GiB |
-| `llama3.3:70b` | 4.8 | 131,072 | tools | **14/14** (best quality) | 39.6 GiB |
-| vLLM `Qwen2.5-14B-Instruct` | 8.0 (e2e) | **8,192 (hard cap)** | tools **broken (HTTP 400)** | 5/14 | BF16 |
+| `llama3.3:70b` | 4.8 | 131,072 | tools | **14/14** | 39.6 GiB |
+| vLLM `Qwen2.5-14B-Instruct` | 8.0 (e2e) | **8,192 hard cap** | tools **broken (HTTP 400)** | 5/14 | BF16 |
 
-Local reality check:
+- **Speed** winner `llama3.2:1b` (163.6) — 5/14 coding. **Balance** winner `qwen3.5:35b-a3b` (76 tok/s, 262K, tools+vision). **Quality** winner `llama3.3:70b` (14/14 at 4.8 tok/s, 33× slower).
+- **Every fast local row is MoE.** Every dense row ≥14B is ≤24 tok/s. That is the GB10 rule.
+- **Local context ceiling is latency, not metadata:** one 261,652-token local retrieval took **164.3 s** (~1,593 tok/s prefill). Near-1M locally is not interactive.
+- vLLM advertises 8,192 total and has no tool parser — the weakest local member despite being "the GPU engine".
 
-- **Speed winner:** `llama3.2:1b` at 163.6 tok/s, but 5/14 coding — throughput without capability.
-- **Balanced winner:** `qwen3.5:35b-a3b` — 76 tok/s, 262K context, tools, vision, 12/14.
-- **Quality winner:** `llama3.3:70b` — 14/14 but **4.8 tok/s**, ~33× slower than the 35B MoE.
-- **Context ceiling is the real local limit:** only three local models declare ≥131K; one declares 262K. A **261,652-token** local retrieval took **164.30 s** (≈1,593 tok/s prefill). Near-1M locally is not a usable interactive path on this box.
-- vLLM advertises **8,192 total** tokens and has no tool parser enabled — it is the weakest member of the local fleet despite being "the GPU engine".
+### 1B. FREE (CLOUD) — zero token price
 
-### 1B. FREE (CLOUD) — zero token price, weights off-machine
-
-| Model / route | tok/s (e2e) | Context | Capabilities | Notes |
+| Route / model | tok/s (e2e) | Context | Capabilities | Strict $0? |
 |---|---:|---:|---|---|
-| **Groq `openai/gpt-oss-120b`** (free tier) | **268.3 / 301.4** | **131,072** | tools-capable, 120B MoE (5.1B active) | measured today through the raw provider API; 65,536 max output; free tier ≈30 RPM / 1k RPD / 200k TPD per model |
-| `nvidia/nemotron-3.5-lightning:free` (OpenRouter, alias `free-HighTPS_Context`) | 51.8 mean (44.2–59.3) | **1,000,000** | text, tools | 65,536 max out; 14/14 coding; **failed exact-JSON at 778K twice**; 262K retrieval in 13.3 s |
-| `nvidia/nemotron-3.5-super-vl:free` (same alias) | 20.4 | **1,000,000** | text (+vision at backend), tools | 131,072 max out; 14/14 coding; **passed JSON at 778,824 and 983,054 tokens** (88–113 s) |
-| Gemini 3.5 Flash (AI Studio free tier) | not valid (see limits) | 1M class | vision, tools, grounding | short call returned 9 completion tokens — thinking consumed the 220-token budget; TPS not measurable this way |
-| Cerebras `gpt-oss-120b` | — | — | — | **HTTP 402 Payment Required** — the old free tier is gone; no longer category B |
-| NVIDIA NIM `gpt-oss-120b` / `deepseek-v4-pro` | — | — | — | **410 Gone** (retired / EOL 2026-08-07); NIM free endpoints churn hard |
-| `free-mode`, `free-mode-fast`, `ROCKETSPEED-FREE` (LiteLLM groups) | mixed | mixed | mixed | **not strict $0**: `free-mode*` can fall back to `paid-mode*`; ROCKETSPEED-FREE mixes Groq + Cohere + Gemini behind `simple-shuffle` |
+| **Groq `openai/gpt-oss-120b`** (free plan) | **268.3 / 301.4** | **131,072** | tools-capable 120B MoE (5.1B active), 65,536 max out | yes, if pinned |
+| `nemotron-3.5-lightning:free` (via `free-HighTPS_Context`) | 51.8 mean | **1,000,000** | text, tools | yes |
+| `nemotron-3.5-super-vl:free` (same alias) | 20.4 | **1,000,000** | vision at backend, tools | yes |
+| Gemini 3.5 Flash (AI Studio) | not valid at 220-token cap | 1M class | vision, tools, grounding | yes (card-free) |
+| Cerebras `gpt-oss-120b` | — | — | — | **no — HTTP 402**, free tier gone |
+| NVIDIA NIM `gpt-oss-120b`, `deepseek-v4-pro` | — | — | — | **no — 410 Gone**, retired |
 
-> **The headline finding:** our *existing* free-cloud picker entry is the **slowest** free option we have access to. Groq's free `gpt-oss-120b` measured **5.2–5.8× faster** than Nemotron Lightning and **13–15× faster** than Super-VL on the identical prompt — but with **131K instead of 1M** context.
+> Our existing free picker entry (`free-HighTPS_Context`) is the **slowest** free option we can reach. Groq free is **5.2–5.8×** faster but caps at **131K**, not 1M.
 
-### 1C. PAID (CLOUD) — metered
+### 1C. PAID (CLOUD)
 
-| Model | tok/s (e2e) | Advertised context | Capabilities | Caveat |
+| Model | tok/s (e2e) | Context | Capabilities | Caveat |
 |---|---:|---:|---|---|
-| **Inception Mercury-3** (`XX_inception`) | **547.8** (360.8 / 734.7) | **1,000,000** | text (no vision), tools | fastest paid member we run; 216/214 output tokens |
-| xAI **Grok 4.7** (`XX_grok`) | 98.7 (98.3 / 99.1) | 500,000 | vision, tools, web | half the context of the 1M models |
-| DeepSeek **V4 Pro** (`XX_deepseek`) | 61.9 (reasoning only) | 1,048,576 | vision-capable at vendor, no vision via our key, 393,216 max out | **no visible answer** at a 220-token budget |
-| Moonshot **Kimi K3.1 Pro** (`XX_kimi`) | 33.6 (31.6 / 35.6) | 1,048,576 | text, tools | requires `temperature: 1`; 217/220 tokens were reasoning |
-| Also configured, unmeasured: Claude Haiku 4.5, GPT-5.5-instant, GPT-5-chat, mimo-v2.5-pro, Ring 2.6 1T | — | — | — | no same-harness numbers yet |
-
-> Paid Kimi/DeepSeek figures are **reasoning throughput, not useful-answer throughput**. Do not read them as "worse than Nemotron".
+| **Mercury-3** | **547.8** | 1,000,000 | text, tools | fastest paid we run |
+| Grok 4.7 | 98.7 | 500,000 | vision, tools, web | half the context |
+| DeepSeek V4 Pro | 61.9 | 1,048,576 | text (vision withheld), 393,216 max out | reasoning ate the 220-token budget |
+| Kimi K3.1 Pro | 33.6 | 1,048,576 | text, tools | needs `temperature: 1`; 217/220 reasoning |
+| Unmeasured: Claude Haiku 4.5, GPT-5.5-instant, GPT-5-chat, MiniMax-M2, Ring 2.6 1T | — | — | — | no same-harness numbers |
 
 ---
 
-## 2. Are there more performance-efficient models? Yes — one per category
+## 2. Our routes as configured — and which are actually strict $0
 
-### 2A. Paid cloud we had not considered → **Cerebras Inference**
+`simple-shuffle`, `num_retries 2`, `allowed_fails 1`, `cooldown 65s`. Fallbacks are declared per group, so "free" in a name is not a guarantee.
 
-We benchmarked four paid endpoints and none of them is a throughput specialist. Independent provider benchmarks on the same open model we can already run (`gpt-oss-120b`) put:
+| Alias (LiteLLM :4000) | Deps | Configured RPM | Behind it | Verdict |
+|---|---:|---:|---|---|
+| `free-mode` | 37 | **1 / 5 / 10 / 15** per dep | Groq 8b, Gemini 2.5-flash, NIM, Cohere, Fireworks kimi | **not strict** — falls back to `paid-mode` |
+| `free-mode-fast` | 5 | 10 | Groq gpt-oss-120b/20b, Gemini flash-lite, Cohere r7b | **not strict** — falls back to paid |
+| `ROCKETSPEED-FREE` | 5 | 10 | same as above | **not strict** — falls back to ROCKETSPEED-FAST (paid) |
+| `ROCKETSPEED-FAST` | 7 | 5 | + DeepSeek-chat, Grok-4-fast | paid-capable by design |
+| `free-mode-large` / `hybrid-model-large` | 14 / 13 | 1 / 5 / 10 / 15 | Gemini 2.5-flash/pro, Fireworks kimi | **not strict** |
+| `hybrid-model` | 5 | 5 | Gemini flash, Groq llama, NIM, gpt-4o-mini, gpt-5.5 | mixed |
+| `free-mode-tools` | 10 | — | Groq llama-3.1-8b, Mistral small, gpt-4o-mini, gpt-5.5 | mixed |
+| **`free-HighTPS_Context`** | 2 | — (0-price enforced per request) | Nemotron Lightning + Super-VL `:free` | **strict $0, no fallback** |
+| **`true-free-tools`** | 3 | — | vLLM Qwen2.5-14B, Ollama qwen2.5:14b, qwen3:30b-a3b | strict free (local only) |
+| **`true-free-tools-fast`** | 3 | — | Ollama qwen2.5:3b, llama3.2:3b, qwen2.5:7b | strict free (local only) |
+| `paid-mode` | 25 | 5,000 / 3,000,000 TPM | Claude Haiku, DeepSeek-chat, MiniMax-M2, gpt-4o-mini | paid |
+| `paid-mode-fast` / `paid-mode-large` | 6 / 6 | — | Grok-4-fast, Claude Haiku, gpt-5-chat, gpt-5.5 | paid |
+| `XX_*` single-provider probes | 1 each | — | groq qwen3.8-27b, gemini 2.5-flash (rpm 5), deepinfra Qwen3.8-Flash, mistral nemo, nous glm-5.3-flashx, cloudflare llama-3.3-70b, ollamacloud gpt-oss:120b-cloud | measurement aliases |
 
-| Provider | gpt-oss-120b output tok/s | List price in/out per 1M |
-|---|---:|---|
-| **Cerebras** (WSE-3) | **~1,586–1,780** | $0.35 / $0.75 |
-| SambaNova | ~700–760 | $0.14 / $0.95 |
-| Fireworks | ~740 | — |
-| Together | ~597 | — |
-| **Groq** (LPU) | ~473–480 | **$0.15 / $0.60** |
-| DeepInfra | ~189 | ~$0.07 blended |
-
-Mercury-3's 547.8 tok/s makes it the best paid member we run, but **Cerebras is ~3× faster than our fastest paid model at 1M-class capability on an open 120B MoE**, and **Groq is ~1.9× cheaper than Cerebras per output token** for ~3.6× less speed. That is the missing paid tier: an *inference-speed* tier, not another frontier-reasoning vendor.
-
-Verification note: our Cerebras key currently returns **HTTP 402** (trial credits exhausted), so the Cerebras figure is third-party, not measured by us. Add it only with a paid/trial balance.
-
-### 2B. Free cloud model that is better → **Groq `gpt-oss-120b` for speed**
-
-- **268–301 e2e tok/s**, 131K context, tools, 120B MoE — measured by us, free tier.
-- Beats `free-HighTPS_Context` by **5.2–5.8×** on speed and is already reachable with a key we hold.
-- Cost of the swap: **131K vs 1M context**. Super-VL retains the only *verified* ~983K path.
-
-**Recommended routing (not yet installed):** keep `free-HighTPS_Context` for ≥300K inputs and add a separate strict-$0 `free-fast-120b` route pinned to Groq `gpt-oss-120b` with **no paid fallback** and its own latency budget. Today `free-mode-fast`/`ROCKETSPEED-FREE` already contain Groq but shuffle with Cohere/Gemini and inherit paid-capable fallbacks, so "fast" is not guaranteed and "$0" is not enforced.
-
-### 2C. Locally run (free), GX10-compatible, not considered → **`gpt-oss-120b` MXFP4**
-
-We run no model above 70B, and the 70B we do run is dense and slow. On GB10-class hardware the published picture:
-
-| Local candidate | Footprint | Published GB10 speed | Why it matters |
-|---|---:|---:|---|
-| **gpt-oss-120b (MXFP4, 5.1B active)** | ~59–68 GiB | **52.9–58.7 tok/s** (llama.cpp), 60.7 (vLLM), 42.1 (Ollama) | **12× faster than `llama3.3:70b` at higher effective quality**; independent 6-language compile benchmark ranks it the single model to keep loaded (equal best pass rate, 3× faster to a passing answer, best Rust 24/30) |
-| **Qwen3.6-35B-A3B (NVFP4)** | ~22 GiB | **~86.3 tok/s** (vLLM, 1 Spark) | direct upgrade path for our 76 tok/s `qwen3.5:35b-a3b` |
-| Gemma 4 26B (4B active, 4-bit) | ~16 GiB | **59.1 tok/s** median | most-run model on DGX Spark today |
-| Qwen3.5-122B-A10B (Q6_K) | ~104 GiB | ~14 tok/s | largest that fits comfortably; slow |
-| llama3.3:70b (what we run) | 39.6 GiB | 4.8 tok/s (ours) | dense; dominated on speed *and* footprint-adjusted quality |
-
-**Answer for Category A:** load **`gpt-oss-120b` MXFP4**. It fits (~60 GiB of 121 GiB), it is a 5.1B-active MoE so GB10's 273 GB/s bandwidth is not the bottleneck, and it replaces a 4.8 tok/s dense 70B with ~42–59 tok/s at equal-or-better coding quality. `Qwen3.6-35B-A3B` is the cheaper incremental win if we want to stay in the 22 GiB class (needs NVFP4 via vLLM, not Ollama).
-
-MoE is the rule on this hardware: every fast local row is MoE (35B-A3B, 30B-A3B, 3B) and every dense row ≥14B is ≤24 tok/s.
+**Consequence:** "free-mode-fast" is fast *when it lands on Groq* and 10 dep-RPM limits mean ~1 request every 6 s; it is not a $0 contract. Only `free-HighTPS_Context` and the two `true-free-tools*` groups are.
 
 ---
 
-## 3. Cross-check by other AIs
+## 3. Rate-limit ceilings — the real bottleneck
 
-Prompt: full three-category inventory + the gap questions above, ~450-word limit, asked to flag errors. Sent to five providers via the local `consult_multi` tool (keys from the private credential file; no key values stored here).
+| Provider | Free ceiling (dated) | Our observation |
+|---|---|---|
+| Groq | 30 RPM, 1,000 RPD, **8,000 TPM**, 200k TPD per model (gpt-oss-120b/20b, qwen3.8-27b) | 268–301 tok/s; TPM is the binding cap for real prompts |
+| OpenRouter `:free` | 20 RPM, 50 RPD (<$10 lifetime credits), 1,000 RPD after | what `free-HighTPS_Context` runs on |
+| Gemini API | per-model RPM/TPM/RPD in AI Studio, unpublished | short call returned 9 tokens (thinking ate budget) |
+| Cohere trial | 20 req/min per chat model, **1,000 calls/month**, non-production | in `free-mode*` and `ROCKETSPEED-FREE` |
+| Cloudflare Workers AI | 10,000 neurons/day, resets 00:00 UTC | quota exhaustion seen previously |
+| NVIDIA NIM | 40 RPM free endpoints | catalog churn: 410/404 today |
+| Cerebras | trial credit only, card required | **402** on our key |
+| Mistral | free mode, no card | **429** today |
+| **Ollama (local)** | `OLLAMA_NUM_PARALLEL=1` → **serialized**, one model at a time; `KEEP_ALIVE=-1`, flash-attn on, KV cache **q4_0** | no RPM cap, but concurrency 1 is a hard queue |
+| vLLM (local) | single model, 8K total context | queue depth unmeasured |
+
+Local "unlimited" is misleading: at `NUM_PARALLEL=1` a 76 tok/s model serving 2 requests behaves like ~38 tok/s each. Free cloud RPM matters more than raw TPS once you run agents with tool loops.
+
+---
+
+## 4. Free models worth pulling onto this box (verified tags, live-checked)
+
+`python3 tools/local_candidate_bench.py --plan` — GET-checks each tag, then compares download×1.15 against free disk (62 GB) and free RAM (48.6 GB at run time).
+
+| Tag | Params | Download | Declared ctx | Caps | Fit today | Published GB10 speed (third-party) |
+|---|---|---:|---:|---|---|---:|
+| `gpt-oss:20b` | 20.9B MoE / 3.6B active | 13 GB | 131K | reasoning, tools | **ok** | 83 tok/s |
+| `gemma4:26b` | 26B MoE / ~3.8B active | 18 GB | 262K | **vision**, tools | **ok** | 59.1 tok/s |
+| `qwen3.6:27b` | 28B dense | 19 GB | 262K | **vision**, tools, thinking | **ok** | 12–13 tok/s |
+| `qwen3-coder:30b` | 30B MoE / 3.3B active | 19 GB | 262K | tools | **ok** | 61 tok/s |
+| `glm-4.7-flash:latest` | ~32B class | 20 GB | 131K | tools, thinking | **ok** | 48.7 tok/s |
+| `gemma4:31b` | 31B dense | 22 GB | 262K | vision, tools | **ok** | dense — slower than 26B |
+| `qwen3-vl:8b` | 8B dense | 6 GB | 262K | **vision/OCR**, tools | **ok** | small, fast |
+| `gpt-oss:120b` | 116.8B MoE / 5.1B active | 65 GB | 131K | reasoning, tools | **TIGHT (disk)** | 52.9–58.7 llama.cpp, 60.7 vLLM, 42.1 Ollama |
+| `nemotron-3.5-super:120b` | 124.5B MoE / 12B active | 72 GB | **1.05M** | **vision**, tools, thinking | **TIGHT** | ~25 tok/s |
+| `qwen3.5:122b-a10b` | 125B MoE / 10B active | 79 GB | 262K | tools, thinking | **TIGHT** | ~29 tok/s |
+
+**Order I would pull them in:**
+1. **`gpt-oss:20b` (13 GB)** — fits today, tools + reasoning, ~83 tok/s class; the cheapest capability jump from a 3B.
+2. **`gemma4:26b` (18 GB)** — the only local path to *vision + tools* at usable speed; 262K context.
+3. **`qwen3-coder:30b` (19 GB)** — code-shaped tool work at MoE speed.
+4. **`gpt-oss:120b` (65 GB)** — the real prize, but **blocked by disk (62 GB free)**, not RAM. Clear ~15 GB first (HF cache is 158 GB), then pull.
+5. `nemotron-3.5-super:120b` last — it is the only *local* near-1M option, but ~25 tok/s and 72 GB make it a specialist.
+
+Do **not** bother with `qwen3.6:27b` for throughput: 28B dense on 273 GB/s ≈ 12 tok/s, i.e. worse than our current 35B MoE by 6×, whatever its coding score.
+
+### Measured with the new harness (validation run, this host)
+
+`tools/local_candidate_bench.py --model qwen2.5:3b --model llama3.2:3b --tiers 8192`
+
+| Model | declared ctx | decode tok/s | e2e tok/s | tools | vision | file read | coding | JSON contract | 8K fill |
+|---|---:|---:|---:|---|---|---|---:|---|---|
+| `qwen2.5:3b` | 32,768 | 39.4 (92.1 in an earlier run) | 39.1 | PASS | n/a | PASS | 3/3 | **PASS** (alpha/charlie/echo) | **7,944 tok, 1.51 s** |
+| `llama3.2:3b` | 131,072 | 92.7 | 91.9 | PASS | n/a | PASS | 3/3 | **FAIL** (returned `delta` for `end`) | 7,952 tok, 1.61 s |
+
+What this already shows: both 3B models pass tools, file reading and all three coding tasks; only qwen2.5:3b survives the strict JSON contract. And the 39-vs-92 swing on the same model is why single-call TPS rankings are noise on a shared host.
+
+### How to benchmark a candidate yourself
+
+```bash
+python3 tools/local_candidate_bench.py --plan                      # fit + tag check, no inference, no pulls
+ollama pull gpt-oss:20b
+python3 tools/local_candidate_bench.py --model gpt-oss:20b --tiers 8192,32768
+python3 tools/local_candidate_bench.py --model gpt-oss:20b --model gemma4:26b --tiers 8192,32768,131072 \
+    --out reports/candidates.json --md reports/candidates.md
+```
+
+It reports: warm decode TPS (3 calls, median), e2e TPS, prefill TPS, real context fill (actual `prompt_eval_count`, re-scaled until ≥85% of the requested tier), tool-call emission (`web_search` schema → this is the proxy for *web browsing*, since a local model can only browse via a tool), vision (real 1px PNG upload), file reading (5-function synthetic module), coding (3 tasks), and strict-JSON output. `--plan` never pulls or infers.
+
+---
+
+## 5. Cross-check by other AIs
+
+Full three-category inventory + gap questions sent to providers via `consult_multi` (keys read from the private credential file; no values stored or printed).
 
 | Voice | Result | Useful signal |
 |---|---|---|
-| **Groq · gpt-oss-120b** | answered | agreed MoE/Qwen3.6-35B-A3B is the local upgrade path (~86 tok/s on identical GB10 class); claimed a "Llama 3.2 8B at ~125 tok/s / 13-14" and a "Mistral-7B free at 1M ctx, 68 tok/s" — **both unsupported; rejected** |
-| **DeepInfra · Llama-3.1-8B** | answered | proposed **Gemma 4 26B (~86 tok/s)** as the local candidate and flagged that Category A/B/C compare different hardware — a fair methodological criticism; its "missing paid provider = Mercury-3" is wrong (already deployed) |
-| **Google · Gemini 3.5 Flash** | partial | refused the premise as "fictional/anachronistic hardware (GB10/DGX Spark)"; **rejected** — the host is real (`nvidia-smi` reports NVIDIA GB10) |
-| **Cerebras · gpt-oss-120b** | HTTP 402 | key has no balance — cannot cross-check |
-| **NVIDIA NIM · kimi-k2.6 / deepseek-v4-pro** | HTTP 404 / 410 | models retired — NIM catalog churn confirmed empirically |
-| **Mistral · mistral-small-latest** | HTTP 429 | rate-limited |
-| **Nous · Hermes-4-405B** | HTTP 404 | model retired |
-| **GitHub Models · gpt-4o-mini** | DNS failure | endpoint unresolvable from this host |
-| **Together · Llama-3.3-70B-Turbo** | HTTP 401 | key rejected — no cross-check possible |
+| **Groq · gpt-oss-120b** | answered | agreed MoE/35B-A3B is the local upgrade path; invented "Llama 3.2 8B at 125 tok/s" and "Mistral-7B free 1M ctx at 68 tok/s" — **rejected, unsupported** |
+| **DeepInfra · Llama-3.1-8B** | answered | proposed Gemma 4 26B and correctly criticised comparing categories across different hardware; its "missing paid model = Mercury-3" is wrong (deployed) |
+| **Google · Gemini 3.5 Flash** | partial | called GB10/DGX Spark "fictional" — **rejected**; `nvidia-smi` reports NVIDIA GB10 |
+| Cerebras / NVIDIA NIM / Mistral / Nous / Together / GitHub Models | failed | 402 / 410+404 / 429 / 404 / 401 / DNS — six cross-check attempts blocked by account state, not by the question |
 
-**Consensus that survives review:** MoE on GB10 is the efficiency answer; `qwen3.5:35b-a3b` is a sound local default but not the ceiling; an MoE in the 26–120B class is the next local step. **Disagreement left open:** whether the next dollar should go to Cerebras (speed) or be avoided entirely in favour of Groq's cheaper 480 tok/s tier. My call: Groq paid first (cheaper, same model, 480 tok/s is already 5× our needs), Cerebras only if TTFT-critical.
+**Consensus:** MoE in the 26–120B class is the efficiency answer on GB10; `qwen3.5:35b-a3b` is a sound default but not the ceiling. **Open disagreement:** next dollar to Cerebras (speed) vs Groq paid (cheaper, 480 tok/s). My call — Groq paid first.
 
-Two of the three responding models produced confident, verifiable errors. Treat single-model AI audits as hypotheses, not evidence.
+Two of three responding models produced confident, checkable errors. Single-model AI audits are hypotheses; the harness is the evidence.
 
 ---
 
-## 4. Method and limitations
+## 6. Notes on `BENCH_GITHUBCOPILOT_GROK.MD` (the other file in this repo)
 
-- **Same harness for speed:** one prompt ("Print the integers 1 through 200 separated by commas, without explanation."), temperature 0 (Gemini excluded), 220-token cap, two sequential calls per model. Reported TPS is `provider completion_tokens / wall seconds` — it **includes** queue, prefill and network, and is **not** decoder-only streaming TPS.
-- **Local vs cloud are not the same measurement.** Ollama rows are native `eval_count/eval_duration` (decoder speed); cloud rows are end-to-end. Do not compare 76.4 (local decode) with 268 (cloud e2e) as if one axis — the local e2e figure for `qwen3.5:35b-a3b` on the same prompt was 72.8 tok/s.
-- **Two calls per model is a smoke test, not capacity.** Shared host, free-tier quotas, provider caching and route selection all move these numbers.
-- **Context numbers are advertised metadata**, except the retrieval tests (262K local, 778K/983K free-cloud) which are actual token counts.
-- **Coding figures** come from a 14-check synthetic mini-suite; they rank these models against each other, not against a coding leaderboard.
-- Third-party GB10 and provider speeds are cited from published llama.cpp/DGX-Spark measurements and provider benchmarks current to 2026-11-11; they are **not** our measurements and are labelled as such.
+Read in full. Where we agree:
 
-## 5. Reproduction
+- Same three-way split; same "free in the alias name ≠ strict $0" warning.
+- Groq free is the speed answer (their 450–1,000 tok/s is Groq's *advertised* LPU figure; **our measured value on this box is 268–301 tok/s e2e**, which is the number to plan capacity against).
+- Cerebras is the notable paid speed tier; Nemotron Super-VL is the long-context pick; Qwen3.6-class MoE is the local upgrade direction.
+
+Where it needs correcting:
+
+1. **Hardware.** It says vLLM runs on a *desktop RTX 5070 12 GB* at "typically 30–60 tok/s". vLLM actually runs on this **GB10** box, BF16, hard-capped at **8,192** tokens, tools returning HTTP 400, measured **8.0 tok/s e2e**. The RTX-5070 description is stale text inherited from the old benchmark scripts.
+2. **Storage.** It calls GX10 storage "not a limiter (1–4 TB, 5–10 large models)". This box has **62 GB free of 916 GB**, so `gpt-oss:120b` (65 GB) does not fit today. Storage, not RAM, is the blocker.
+3. **Qwen3.6-35B-A3B is not an Ollama pull.** The 35B-A3B NVFP4 build it recommends is a vLLM/Hugging Face artifact; the Ollama tag that exists is `qwen3.6:27b` (dense, ~12 tok/s here). Pull path matters more than the model name.
+4. **Its 90–110 tok/s figure for 35B-A3B assumes vLLM + MTP/speculative decoding.** Our Ollama `qwen3.5:35b-a3b` measures 76 tok/s with no speculation — same ballpark, different engine. Comparing the two as "the model's speed" hides an engine decision.
+5. **No rate-limit matrix and no measurement of Groq/Cerebras/Gemini/NIM in its file** ("keys not accessed"). §3 above fills that gap with dated ceilings, and we measured the free providers directly.
+
+Net: its recommendations are directionally right and its speed numbers are advertise-sourced; treat them as ceilings, not expectations.
+
+---
+
+## 7. Method and limitations
+
+- **Speed:** one prompt ("Print the integers 1 through 200 separated by commas…"), temperature 0, 220-token cap, 2–3 calls/model. TPS = completion tokens / wall seconds, **including** queue, prefill and network — not decoder-only streaming.
+- **Axes are not identical:** Ollama local rows are native decode (`eval_count/eval_duration`); cloud rows are end-to-end. Do not compare 76.4 local decode with 268 cloud e2e as one axis — the local e2e figure on the same prompt was 72.8.
+- **Shared host:** a 3B model swung 39→92 tok/s between runs. Medians over 3 calls, not single readings.
+- **Context figures are advertised metadata** except the retrieval tests: 261,652 local; 778,824 and 983,054 on the free route — all actual `prompt_eval_count`.
+- **Coding** = 14-check synthetic mini-suite (and 3 tasks in the new harness). Ranks these models against each other, not a coding leaderboard.
+- **GB10/provider third-party numbers** are cited, labelled, and not our measurements.
+- **Free-tier ceilings change weekly** (Cerebras free tier is already gone; NIM retired two models we had configured). Re-check before building on any of them.
+
+## 8. Reproduction and evidence
 
 ```bash
-# free-cloud + local same-harness comparison (this file's measured rows)
-python3 /tmp/bench_free.py            # writes reports/model_bench_three_categories_2026-11-11.json
-
-# free route policy tests
+python3 tools/local_candidate_bench.py --plan
+python3 tools/local_candidate_bench.py --model qwen2.5:3b --tiers 8192
+python3 /tmp/bench_free.py                # free-cloud vs local, same prompt (writes the JSON below)
 .venv/bin/python -m unittest discover -s tests -p test_free_high_tps_context.py -v
-
-# AI cross-check
 python3 tools/consult_multi.py --provider groq --model openai/gpt-oss-120b --prompt-file /tmp/bench_consult.md
 ```
 
-Evidence produced on this host: `reports/local_model_benchmark_2026-11-11.md`, `reports/free_high_tps_context_2026-11-11.json`, `reports/model_bench_three_categories_2026-11-11.json`. No credential values are included in this file.
+Evidence on the host: `reports/local_model_benchmark_2026-11-11.md`, `reports/free_high_tps_context_2026-11-11.json`, `reports/model_bench_three_categories_2026-11-11.json`, `reports/local_candidate_bench_validation_2026-11-11.json`. No credential values appear in this file.
