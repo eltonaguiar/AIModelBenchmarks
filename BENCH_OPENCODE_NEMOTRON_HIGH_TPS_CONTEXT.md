@@ -59,10 +59,15 @@ Local read: speed = `llama3.2:1b` (163.6 tok/s) but weak coding; balanced = `qwe
 | Featherless (`FEATHER API KEY`) | — | — | **HTTP 401** |
 | Modelscope (`MODELSCOPE API KEY`) | — | — | **URLError** |
 | OrcaRouter (`ORCAROUTER.AI`) | — | — | **URLError** |
-| Qwen free (`QWEN_API_KEY_FREE`) | — | — | **NO KEY** |
+| Qwen free (`QWEN_API_KEY_FREE`) | — | — | **key present in dbpasses but `_token` parser did not match label** |
 | Chutes (`CHUTES_API_KEY_FREE`) | — | — | **HTTP 404** |
+| **Ofox** (`OFOX_API_KEY`) | **131 models** | **1,000,000** | **key OK; `anthropic/claude-fable-5` at 1M ctx** |
+| **LLM7** (`LLM7_API_KEY_FREE`) | **69 models** | **512,000** | **key OK; Inkling-Small 512K, assorted turbo models** |
+| **Venice** (`VENICE_INFERENCE_KEY`) | **139 models** | **1,048,576** | **key OK; gemini-3-* flash at 1M, z-ai-glm-5-3-flash at 1,048,576** |
+| **ZAI** (`ZAI_API_KEY`) | **12 models** | — | **key OK; glm-4.5 through glm-5.2 series** |
+| **Upstage** (`UPSTAGE.AI API KEY`) | **9 models** | — | **key OK; solar-pro4, solar-mini4, solar-decide series** |
 
-Notable theoretical candidates worth measuring next: **SambaNova `MiniMax-M3.1-Flash` and `GLM-5.3` (1M context, key confirmed live)**, **Hyperbolic `Qwen3-Coder-480B-A35B` (262K, coding-specialist)**, **Requesty (745 models, 1M ctx, 200 free req/day)**.
+Notable theoretical candidates worth measuring next: **SambaNova `MiniMax-M3.1-Flash` and `GLM-5.3` (1M context, key confirmed live)**, **Hyperbolic `Qwen3-Coder-480B-A35B` (262K, coding-specialist)**, **Requesty (745 models, 1M ctx, 200 free req/day)**, **Venice (gemini-3-* flash at 1M ctx, 139 models)**, **LLM7 (69 models, Inkling-Small 512K ctx)**.
 
 ### 1D. PAID CLOUD (RAN) — measured through our harness
 
@@ -102,6 +107,11 @@ Notable theoretical candidates worth measuring next: **SambaNova `MiniMax-M3.1-F
 | DeepInfra primary | `DEEPINFRA API KEY` | dead (401); alt key works but not measured |
 | GitHub Models | `GITHUB MODELS API KEY` | free quota on PAT tokens; not confirmed replenishing |
 | Hypereal | `HYPEREAL CLOUD API KEY` | per-model/per-tier credit pools; several models report `balance=0` |
+| SiliconFlow | `SILICONFLOW.com API KEY` | **HTTP 401 — token invalid** |
+| PublicAI | `PUBLIC AI KEY` | **HTTP 401 — unauthorized** |
+| Bluesminds | `BLUESMIND API KEY` | **HTTP 401 — invalid token** |
+| NaraRouter | `NARAROUTER AI API KEY` | **HTTP 403 — requires Telegram group relink** |
+| Cohere trial | `COHERE_TRIAL_API_KEY` | **OK but 0 models** — trial key, no models available |
 
 Rule applied: temporary credits that run out and do not replenish are disqualified. We keep them only as "may reconsider if credits replenish."
 
@@ -113,7 +123,7 @@ Rule applied: temporary credits that run out and do not replenish are disqualifi
 |---|---|---|
 | **Local (free)** | `gpt-oss-120b` MXFP4 (~59–68 GiB) | ~12× faster than our `llama3.3:70b` (4.8 tok/s) at equal/better coding; 5.1B-active MoE fits GB10 bandwidth; alternative `Qwen3.6-35B-A3B` (~86 tok/s, 22 GiB) |
 | **Free cloud (ran)** | Groq `gpt-oss-120b` pinned route | 5–6× faster than Nemotron Lightning; strict-$0, no paid fallback; trade 1M→131K context; **≈30 RPM / 1k RPD / 200k TPD** — single-agent OK, not high-concurrency |
-| **Free cloud (theoretical — measure next)** | SambaNova `MiniMax-M3.1-Flash` / `GLM-5.3` (1M ctx); Hyperbolic `Qwen3-Coder-480B-A35B` (262K) | keys confirmed live, 1M-class context, unmeasured TPS |
+| **Free cloud (theoretical — measure next)** | SambaNova `MiniMax-M3.1-Flash` / `GLM-5.3` (1M ctx); Venice gemini-3-* flash (1M ctx, 139 models); LLM7 Inkling-Small (512K ctx, 69 models); Hyperbolic `Qwen3-Coder-480B-A35B` (262K) | keys confirmed live, 1M-class context, unmeasured TPS |
 | **Paid cloud (ran)** | Inception Mercury-3 (547.8 tok/s) — already our fastest | keep as paid speed baseline |
 | **Paid cloud (theoretical)** | Cerebras `gpt-oss-120b` (~1,586 tok/s) if credits replenish; else Groq paid (~480 tok/s) | Cerebras ~3× Mercury-3 but our key is 402; Groq paid cheaper per output token |
 
