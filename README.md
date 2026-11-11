@@ -16,13 +16,13 @@ This is the normalized index. Every number is labeled as one of: **this session*
 
 | Expected | File on `main` at this compile | Status |
 |---|---|---|
-| FREEBUFF | `BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD` | Present. User says FREEBUFF is still editing, so this index is against the file as of `6fda6f1`, not a later rewrite. |
-| OPENCODE | `BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md` | Present. User marked OPENCODE done. |
-| ZOOCODE | `BENCH_ZOOCODE_PAID_MODE.MD` | Present. Latest seen here: `27d0b61`, folded into `6fda6f1`. User marked ZOOCODE done. |
-| KILO_V1 | `BENCH_KILO_v1_NEMOTRON_AUDIT.MD` | Present as of `6fda6f1`. User had marked it in progress; this is the file that landed. |
-| GHCOPILOT_GROK (this session) | `BENCH_GITHUBCOPILOT_GROK_GHCOPILOT_GROK.MD` | This commit. `BENCH_GITHUBCOPILOT_GROK.MD` is a different author. |
-| KILO_V2 | — | **Not on `main`.** No findings copied. |
-| HERMES | — | **Not on `main`.** No findings copied. |
+| FREEBUFF | `BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD` | Present through `dca3449`, including its live gateway coverage audit; user marks FREEBUFF done. |
+| OPENCODE | `BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md` | Present; user marks OPENCODE done. |
+| ZOOCODE | `BENCH_ZOOCODE_PAID_MODE.MD` | Present with live coverage audit at `092b79c`; user marks ZOOCODE done. Some conclusions remain disputed below. |
+| KILO_V1 | `BENCH_KILO_v1_NEMOTRON_AUDIT.MD` | Present as of `6fda6f1`; user marks KILO_V1 done. |
+| GHCOPILOT_GROK (this session) | `BENCH_GITHUBCOPILOT_GROK_GHCOPILOT_GROK.MD` | This follow-up adds the final runtime/config coverage cross-check. The unsuffixed file is a different author. |
+| NEMO_HERMES | `BENCH_NEMOTRON_HERMES.MD` | Present from `d84f6a1`; user says Hermes is still pending/in progress. |
+| KILO_V2 | — | **In progress; not on `main` at last fetch.** |
 
 ---
 
@@ -176,6 +176,31 @@ Not measured on the 220-token harness.
 
 ---
 
+## Service health spot-check
+
+After the operator reported recovery, vLLM `http://127.0.0.1:8000/v1/models` and LiteLLM `http://127.0.0.1:4000/health/liveliness`, `/health/readiness`, and `/v1/models` all returned HTTP 200; both ports were listening. vLLM listed `Qwen/Qwen2.5-14B-Instruct`, and LiteLLM listed 31 aliases including `paid-mode`. This verifies API reachability only; no `paid-mode` completion was sent, so routing to its upstream was not re-tested. This check also says nothing about GitHub Copilot's Auto model selection or account billing. No services were restarted or changed.
+
+## Live gateway coverage
+
+Read-only snapshot on 2026-11-11. `/v1/models` exposed **31 aliases**; `/model/info` exposed **170 deployments / 73 distinct upstream model IDs**. The local YAML also contained 31 aliases and 170 deployment rows. Alias-set comparison and exact `(alias, upstream model)` pair comparison both had **zero differences**. This verifies mapping coverage at that moment, not upstream availability, billing, or the completeness of provider catalogs.
+
+| Route class | Aliases | Coverage reading |
+|---|---|---|
+| Local-only | `true-free-tools`, `true-free-tools-fast` | Ollama/vLLM deployments; no cloud quota. Live `/model/info` shows three deployments per group. |
+| Dedicated zero-price long context | `free-HighTPS_Context` | Two OpenRouter Nemotron deployments, 900K input / 8,192 output, 240-second route timeout, explicit zero-price guard and no paid fallback. |
+| Free-named or hybrid pools | `free-mode`, `free-mode-fast`, `free-mode-large`, `free-mode-tools`, `ROCKETSPEED-FREE`, `ROCKETSPEED-FAST`, `hybrid-model`, `hybrid-model-large` | Mixed providers, duplicated keys/models, per-deployment client caps and some paid-capable/fallback routes. Alias labels are not a zero-cost guarantee. Freebuff's latest audit reports 44 `free-mode` deployments and identifies dead slots from individual provider probes. |
+| Paid pools | `paid-mode`, `paid-mode-fast`, `paid-mode-large` | Paid-capable routes; a healthy proxy/model-list response does not test any specific paid upstream or estimate charges. |
+| Direct/model-specific aliases | `cloudflare-llama`, `nvidia-deepseek-v4-pro`, `openrouter-ring-1t`, `claude-haiku-direct`, `deepseek-chat-direct`, `novita-deepseek-v4-pro-direct`, `XX_groq`, `XX_gemini`, `XX_deepinfra`, `XX_mistral`, `XX_nous`, `XX_cloudflare`, `XX_ollamacloud`, `XX_deepseek`, `XX_grok`, `XX_kimi`, `XX_inception` | Seventeen direct aliases span free, paid, local-adjacent, and unverified routes; classify by deployment/provider, not alias alone. |
+
+### Final suggestions (documentation only)
+
+1. Measure the existing multi-deployment free pools with one fixed low-token prompt per deployment before adding providers. Keep per-model success, latency, client RPM/TPM, provider quota, and cost evidence separate; aggregate group metadata is not an upstream guarantee.
+2. Triage Freebuff's 17 reported dead deployments. Reconfirm each error against its exact route/key once before proposing removal; 401/404/402/412 results are evidence for that probe, not proof every provider account is globally dead.
+3. Do not promote ERNIE into `free-HighTPS_Context` yet: earlier calls failed because reasoning was required, and Freebuff's latest tool-schema probe got a 429. Require a successful long-context JSON/tool test and explicit zero-price verification first.
+4. Treat `command-a-03-2025` as a limited, non-commercial Cohere trial, not a general-purpose free champion; verify the terms before routing shared workloads to it.
+5. Keep health checks observational. A failed readiness probe should alert an operator; do not automatically restart the proxy while agents may be using it without a restart policy and coordination.
+6. This is a point-in-time mapping audit, not a config change. The worktree's `litellm_config.yaml` was already modified; this task did not edit or stage it.
+
 ## Thoughts on files already on `main`
 
 ### `BENCH_GITHUBCOPILOT_GROK.MD` — not this session
@@ -184,27 +209,32 @@ Different Grok author. Hardware claim is wrong for this machine: vLLM is on the 
 
 ### `BENCH_FREEBUFF_DEEPSEEK_V4_1_FLASH.MD`
 
-Best current audit. Correct host, correct decode-vs-e2e split, correct warning that `free-mode*` is not strict $0, correct Cerebras 402, correct Kimi temperature-1 note, correct reading of Moonshot 5,000 rpm as a router cap. Groq 268.3/301.4 is their harness and matches `reports/model_bench_three_categories_2026-11-11.json`. Their Groq and OpenRouter RPM figures remain **their claims** until a provider page is fetched. Section 11 is the right replenishing-vs-credit rule. This README attributes that audit; it does not pretend to have repeated every probe.
+Best provider/key audit on `main`, now with a live route coverage section. Its 31 aliases, 170 deployments, and 73 upstream IDs match this session's read-only runtime/config comparison. The dead-slot findings are attributed to Freebuff; no config changes were made here. Groq 268.3/301.4 is their harness and matches `reports/model_bench_three_categories_2026-11-11.json`. Rate-limit values remain attributed to their probes, not provider documentation fetched by this session. Reconfirm per route before removing a deployment.
 
 ### `BENCH_OPENCODE_NEMOTRON_HIGH_TPS_CONTEXT.md`
 
-Agrees on the local order and on Groq beating Nemotron Lightning on short e2e. Also agrees Lightning failed exact JSON at ~778K while Super-VL passed 983,054. That protocol split is better than Zoo's collapsed "both retained facts at 779K". Do not adopt the recommendation to pull local `gpt-oss-120b`: disk margin is too small. Their 30 RPM Groq figure is the same unsourced number. SambaNova "key works" conflicts with Freebuff's chat 401.
+Agrees on the local order and on Groq beating Nemotron Lightning on short e2e. Also agrees Lightning failed exact JSON at ~778K while Super-VL passed 983,054. That protocol split is better than Zoo's collapsed "both retained facts at 779K". Do not adopt the recommendation to pull local `gpt-oss-120b`: disk margin is too small. Their Groq RPM figure remains attributed, not independently fetched here. SambaNova catalog HTTP 200 is not generation proof and conflicts with Freebuff's chat 401.
 
 ### `BENCH_ZOOCODE_PAID_MODE.MD`
 
-`27d0b61` correctly changed the intro from "all three members" to the two measured Nemotron rows. Three corrections remain:
+Its newest coverage audit correctly recognizes the 31 aliases and two-member Nemotron route. The remaining corrections are:
 
 - The host line still adds a desktop RTX 5070. That split is the web-Grok error. vLLM's 8.0 E2E row in Zoo's own local table contradicts it.
 - Section 2 says all free-cloud members rotate inside `free-HighTPS_Context`. Groq is a separate free route and the measured speed leader.
-- Section 5 qualifies Featherless and Nous from catalog listings, and disqualifies Groq on a 403. This session's Groq retry was HTTP 200. Featherless and Nous stay unqualified.
+- The Groq 403 still contradicts this session's User-Agent retry (HTTP 200) and Freebuff's successful gpt-oss probe. Treat it as a key/probe-path-specific failure, not a provider-wide death verdict.
+- The ERNIE addition suggestion is premature: earlier calls returned 400 because reasoning was mandatory, and Freebuff's later tool-schema probe got a 429. Keep it out of the long-context alias until it passes the required route tests.
 
 Zoo's OpenRouter 1,000 requests/day observation is the right operational ceiling **if** their key query is accurate. This session did not repeat that HTTP call.
 
 
 ### `BENCH_KILO_v1_NEMOTRON_AUDIT.MD`
 
-Agrees with this session on the hardware error: vLLM is on the GB10 at 8.0 E2E, not an RTX 5070 at 30–60 tok/s. Also agrees `qwen3.5:35b-a3b` is the installed balance pick and that Groq's short-harness speed is real. Their Groq 30 RPM / 8,000 TPM ceiling is still their claim, not a page fetched here. Their `gpt-oss:20b` pull suggestion is more plausible than a 65 GB 120B pull (they say 13 GB), but this session did not pull it. Disk was 58G free when checked. Do not treat their ModelScope DeepSeek-V4.1-Flash recommendation as measured.
+Agrees with this session on the hardware correction: vLLM is on the GB10 at 8.0 E2E, not an RTX 5070 at 30–60 tok/s. Their 90-second proxy timeout is the global LiteLLM default, but `free-HighTPS_Context` overrides it to 240 seconds; the latter's 113-second Super-VL retrieval was within that route timeout. Their Groq rate ceilings remain their claims, not provider documentation fetched here. Kilo's Mistral 429 and this session's separate `open-mistral-nemo` HTTP 200 are endpoint/key-specific results. Its GitHub Models claim conflicts with Freebuff's retired-endpoint finding. Requesty's 200/day is limited, not nearly unlimited; Feather's pricing/quota remains unknown. Treat `gpt-oss:20b` and ModelScope DeepSeek-V4.1-Flash as candidates, not measurements from this session.
 
-### Still absent
+### `BENCH_NEMOTRON_HERMES.MD`
 
-KILO_V2 and HERMES were not on `main` at compile time. FREEBUFF may still revise their file after this commit.
+Hermes lists `usb-mistral-nemo-12b` and `library-mistral-nemo-latest` as resident models, but neither appears in this session's live Ollama `/api/tags` response (26 tags). Treat these as unverified/nonresident here, not tested local candidates. Its Groq 403 is contradicted by this session's HTTP 200 retry and Freebuff's successful probe. NVIDIA/SambaNova catalog responses are not generation benchmarks; SambaNova free usability remains disputed by Freebuff's chat 401. The `gpt-oss:20b` pull and other theoretical options remain recommendations, not measurements from this session.
+
+### Still pending
+
+KILO_V2 is in progress and was not on `main` at last fetch. Hermes's report is present, but the user says it may still be in progress. OPENCODE, KILO_V1, FREEBUFF, and ZOOCODE are marked done by the user.

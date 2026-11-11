@@ -26,6 +26,25 @@ The 35B row is a speed measurement, not a capability confirmation. A thinking mo
 
 `llama3.3:70b` was not loaded. Prior report: 14/14 coding, 4.8 tok/s, tools PASS/FAIL, 42.52 GB.
 
+## Service health spot-check
+
+After the operator reported recovery, vLLM `http://127.0.0.1:8000/v1/models` returned HTTP 200 and listed `Qwen/Qwen2.5-14B-Instruct`. LiteLLM `http://127.0.0.1:4000/health/liveliness`, `/health/readiness`, and `/v1/models` returned HTTP 200; the proxy listed 31 aliases including `paid-mode`. Both ports were listening. This is a connectivity check, not a paid-model completion test: no request was sent through `paid-mode`, so its upstream route remains unverified. No service was restarted or changed.
+After the operator reported recovery, vLLM `http://127.0.0.1:8000/v1/models` returned HTTP 200 and listed `Qwen/Qwen2.5-14B-Instruct`. LiteLLM `http://127.0.0.1:4000/health/liveliness`, `/health/readiness`, and `/v1/models` returned HTTP 200; the proxy listed 31 aliases including `paid-mode`. Both ports were listening. This is a connectivity check, not a paid-model completion test: no request was sent through `paid-mode`, so its upstream route remains unverified. It also provides no evidence about GitHub Copilot's Auto model selection or account billing. No service was restarted or changed.
+
+## Live alias and deployment coverage
+
+Read-only snapshot on 2026-11-11: `/v1/models` exposed 31 aliases; `/model/info` returned 170 deployments and 73 distinct upstream model IDs. The current local YAML also had 31 aliases and 170 deployment rows. The live/runtime comparison found zero alias mismatches and zero differences in exact `(alias, upstream model)` deployment pairs. This checks mapping parity, not provider availability, sustained free quota, or billing.
+
+Alias classes: local-only (`true-free-tools`, `true-free-tools-fast`); dedicated zero-price long-context (`free-HighTPS_Context`); mixed/free-named or hybrid pools (`free-mode`, `free-mode-fast`, `free-mode-large`, `free-mode-tools`, `ROCKETSPEED-FREE`, `ROCKETSPEED-FAST`, `hybrid-model`, `hybrid-model-large`); paid-capable pools (`paid-mode`, `paid-mode-fast`, `paid-mode-large`); and 17 direct/model-specific aliases. Do not infer price from the alias name. In particular, health and `/v1/models` success do not establish that `paid-mode` can reach a specific paid upstream or what it would cost.
+
+## Final suggestions (no changes applied)
+
+1. Benchmark existing free-pool deployments with one fixed prompt and record success, e2e latency, client caps, provider quota, and cost as separate fields before adding more routes.
+2. Reconfirm Freebuff's 17 reported dead slots individually before proposing removal; route/key-specific HTTP failures are not universal provider verdicts.
+3. Keep ERNIE out of the 1M context alias until it passes a real long-context JSON/tool probe and the zero-price guard is verified; available evidence is an earlier 400 and a later tool-call 429.
+4. Treat proxy health checks as alerts, not automatic restart instructions, while other agents may be using the process.
+5. No config, service, provider credential, or paid completion was changed or tested by this coverage pass.
+
 ## Status probes this session
 
 No keys printed. Bodies not printed.
@@ -76,8 +95,12 @@ Agrees Groq beats Nemotron Lightning on short e2e, and that Lightning failed exa
 
 ### `BENCH_KILO_v1_NEMOTRON_AUDIT.MD`
 
-Agrees the RTX 5070 label is stale and that vLLM is the weak local member. Agrees on the installed local ranking. Their Groq RPM/TPM ceiling and `gpt-oss:20b` pull are labeled as theirs. KILO_V2 was not on `main`.
+Agrees the RTX 5070 label is stale and that vLLM is the weak local member. Agrees on the installed local ranking. Timeout nuance: the 90-second value is the global LiteLLM default, while the two `free-HighTPS_Context` deployments explicitly set 240 seconds; its 113-second Super-VL call therefore does not demonstrate that this route needs a larger timeout. Their Groq RPM/TPM ceiling remains unverified against provider documentation. Kilo's Mistral 429 and this session's separate `open-mistral-nemo` HTTP 200 are endpoint/key-specific results. Their GitHub Models qualification conflicts with Freebuff's claim that it has been retired; Requesty's 200/day is limited rather than near-unlimited, and Feather's recurring free quota is unproven. Treat `gpt-oss:20b` and ModelScope DeepSeek-V4.1-Flash as candidates, not measurements from this session. KILO_V2 was not on `main` at this fetch.
+
+### Current service status
+
+The post-recovery health check returned HTTP 200 from vLLM and LiteLLM, with both ports listening. The alias list includes `paid-mode`, but no completion request was made, so paid upstream routing was not tested. No service state was changed.
 
 ### Absent
 
-HERMES and KILO_V2 had not landed when this file was written. Nothing from them is adopted.
+NEMO_HERMES and KILO_V2 are in progress and had not landed when this file was updated. OPENCODE and FREEBUFF are also in progress; their current files may change after this review. Nothing from the unfinished reports is adopted.
