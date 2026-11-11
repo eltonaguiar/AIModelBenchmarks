@@ -246,3 +246,67 @@ This one is a **digest**, not a measurement run: it restates figures from the ea
 6. Minor: Grok 4.7 is labelled "text → text" — it is our only paid entry with vendor vision + web-search tools configured. Mercury-3 genuinely is text-only.
 
 What is worth keeping from it: the three-category structure, the 2.54× Lightning-vs-Super-VL ratio (matches our 51.8 / 20.4), and the explicit warning that Kimi/DeepSeek TPS is reasoning throughput rather than answer throughput.
+
+---
+
+## 11. Free-tier key audit: every LLM provider in the credential file
+
+Method: mapped each LLM label in the private key file to its provider endpoint (labels only — no values are printed, stored or committed), read the live model catalog with the key, then sent **one** `max_tokens: 8` probe to a free-class model to prove access. A catalog listing alone is not proof: Cerebras lists models and still bills/refuses.
+
+**Rule applied (per operator):** a *recurring* allowance that replenishes qualifies. A one-time signup credit, a $5 trial, or a "valid 30–90 days" grant is **disqualified**, even when it is generous, because it does not replenish.
+
+### 11A. Qualified — recurring free that actually answered
+
+| Provider | Free mechanism | Probe result | Free models usable now |
+|---|---|---|---|
+| **Groq** | Free plan, recurring: 30 RPM / 1k RPD / 8k TPM / 200k TPD per model | **OK** — `openai/gpt-oss-120b`, 0.16 s | `gpt-oss-120b`, `gpt-oss-20b`, `qwen3.8-27b`, `qwen3.6-27b`, `gpt-oss-safeguard-20b`, `allam-2-7b` |
+| **OpenRouter `:free`** | Recurring daily quota: 20 RPM, 50 RPD, **1,000 RPD** because the key has lifetime credit | **OK** — `nemotron-3.5-lightning:free` and `cohere/north-mini-code:free`, both **cost 0** | 13 `:free` models incl. `nemotron-3.5-lightning`, `nemotron-3.5-super-vl`, `nemotron-3-ultra-550b-a55b`, `cohere/north-mini-code`, `baidu/ernie-5.5-flash-preview`, `recursive/flint-v1.0`, `liquid/lfm-3-1.7b` |
+| **Google Gemini API** | Free tier on Flash/Gemma models, no card, recurring | **OK** — `gemma-4-31b-it` answered (33 s, thinking-heavy) | 63 catalog entries; free class includes `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemini-2.5-flash`, `gemini-flash-lite-latest` |
+| **Mistral** | Free "experiment" tier, no card, recurring | **OK** — `ministral-3b-latest`, 0.42 s | `ministral-3b/8b/14b`, `mistral-small`, `open-mistral-nemo` |
+| **Cohere (trial)** | Trial key: **1,000 calls/month**, 20 RPM per chat model, recurring but non-commercial | **OK** — `command-a-03-2025` | Command A family, Command R/R7B |
+
+### 11B. Disqualified — one-time credit, dead credential, or metered
+
+| Provider | Why disqualified |
+|---|---|
+| **Cerebras** | `HTTP 402 Payment required`. Free tier is now a **$5/30-day trial** with card; our credit is spent and does not replenish |
+| **NVIDIA NIM** | Free endpoints are "prototyping" credits, and both probes **timed out at 70 s** while the catalog read fine. Even if revived, treat as evaluation-only, not standing capacity |
+| **SambaNova** | Catalog read OK (5 models) but chat returned **HTTP 401 "Incorrect API key"** — the key is inconsistent between endpoints. Its documented free tier (20 RPM/20 RPD/200k TPD) would qualify **if** a working key existed |
+| **Nous Research** | Label says "USE ONLY FREE MODELS", but the probe returned `cost: 3.24e-05` with `cost_details.source: openrouter_cost_floor` — **it bills at OpenRouter floor rates**. Not free, and the label is misleading |
+| **Hugging Face** | Probe worked but `estimated_cost` was charged; free Inference Provider credits were removed in Oct 2026. Metered |
+| **DeepInfra** | Probe worked, `estimated_cost 2.8e-06`. Metered, no recurring free allowance |
+| **SiliconFlow** | `HTTP 401 Token is invalid`. Its free models (xing4.0-29b-a4b, qwen3-8b, glm-4-9b…) need mainland-China real-name verification plus a ¥14 signup credit — one-time **and** geo-restricted |
+| **ModelScope** | `HTTP 401 invalid token` on DeepSeek V4.1 Flash, despite a 6M-token/day free allowance being reported. Unusable credential |
+| **Together** | `HTTP 401 Unauthorized`; no free tier (trial credit discontinued) |
+| **Fireworks** | `HTTP 412 account suspended` (monthly spend limit). Its "free" label refers to a signup credit |
+| **Kimi / Moonshot** | `HTTP 401 Invalid Authentication`; no standing free tier |
+| **Scaleway** | `HTTP 403 insufficient permissions`; offers are **1M free tokens per model** — a time-boxed grant, disqualified by your rule |
+| **Alibaba DashScope / Qwen** | 1M tokens per model valid **90 days** — one-time grant, disqualified. (The `QWEN_API_URL` label is a URL, not a key) |
+| **Nebius Token Factory** | $1 trial, 30 days, **card required** — disqualified |
+| **xAI, Inception, DeepSeek, Hypereal, Novita** | Paid only; no recurring free allowance |
+| **Hyperbolic** | Endpoints **decommissioned** (404 on Llama-3.3-70B) |
+| **GitHub Models** | Retired (endpoint unresolvable) |
+| **Cloudflare Workers AI** | *Qualifies in principle* (10,000 neurons/day, recurring) but the stored value is an account-level key with no account ID wired up, so no probe was possible — **blocked, not disqualified** |
+
+### 11C. Free models we already hold but are not routing
+
+1. **`gemma-4-31b-it` and `gemma-4-26b-a4b-it` are free on the Gemini API.** That is a 31B-class, 262K-context, vision-capable model at $0 recurring — currently unused. The strongest single addition found in this audit.
+2. **`nemotron-3-ultra-550b-a55b:free`** on OpenRouter (1M context, frontier-scale reasoning) — we only route the two smaller Nemotrons.
+3. **`cohere/north-mini-code:free`** — a code-specialised free model, verified cost 0, distinct from our trial-key Cohere route.
+4. **`baidu/ernie-5.5-flash-preview:free`, `recursive/flint-v1.0:free`, `liquid/lfm-3-1.7b:free`** — 1M-context / small-and-fast free options, all cost 0.
+5. **Groq `qwen3.8-27b`** — our alias `XX_groq` points at `groq/qwen/qwen3.8-27b`, which is a **free-plan model**. Same for `XX_gemini` (`gemini-2.5-flash` free tier). Two aliases we treat as probes are already $0.
+
+### 11D. Not in the credential file — new recurring-free options worth a signup
+
+- **LLM7.io** — free token, **100k tokens/day**, 1 r/s / 60 rpm / 250 rph, no card. `turbo` models only.
+- **OpenCode Zen** — ~10 free models including DeepSeek V4.1 Flash Free, GLM-5.3-Flash Free, Nemotron 3.5 Lightning/Super-VL; Zen key required; free prompts may be used for training.
+- **Kilo** — `qwen/qwen3.8-27b:free` (262K) with no key required.
+- **Cloudflare Workers AI** — fix the account-ID wiring on the key we already hold and 10k neurons/day becomes usable.
+
+### 11E. Credential-health anomalies (not free-tier questions, but found while auditing)
+
+- Same-label key inconsistency at **SambaNova**: catalog accepts it, chat rejects it.
+- **Nous** label instructs "free models only" but the gateway prices every call — a policy label, not a $0 guarantee.
+- Two labels in the file are not keys (`QWEN_API_URL`, and the Ollama-cloud slot), and **Brave/Tavily/Exa/Firecrawl** search keys are outside this audit's scope but separately known to be broken or capped.
+
+**Bottom line:** of 20 LLM providers with a key in the file, **5 offer recurring free capacity that answered today** (Groq, OpenRouter `:free`, Gemini free tier, Mistral, Cohere trial), **1 is blocked on configuration** (Cloudflare), and **14 are disqualified** — mostly because "free" meant a one-time credit that will not come back.
