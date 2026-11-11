@@ -1,56 +1,18 @@
-
-# BENCH_ZOOCODE_PAID_MODE.MD
-
-**Agent:** Zoo (Claude-based, VS Code Code mode) · **Date:** 2026-11-11 · **Host:** Ubuntu ARM64 NVIDIA GB10 class (121 GiB unified memory), plus desktop RTX 5070 12GB
-
-Scope: our fleet split by **where the weights run** — locally / free cloud / paid cloud — with **capabilities, TPS, context window, and rate limits** as the four decision axes. Every number below is measured on our own stack unless explicitly marked *advertised* or *third-party*.
-
----
-
-## 1. Our Current Models — LOCALLY RUN (FREE)
-
-Weights run on our own hardware. Zero marginal cost, no rate limit, fully private; bounded by VRAM/unified memory.
-
-| Model | Where | tok/s | Context | Capabilities | Notes |
-|---|---|---:|---:|---|---|
-| `vLLM Qwen2.5-14B-Instruct` | vLLM :8000 | 8.0 (e2e) | **8,192 hard cap** | tools **broken** (HTTP 400) | Weakest local member despite being "the GPU engine". BF16. |
-| `qwen2.5:14b` | Ollama :11434 | 23.9 | 32,768 | tools, file read | 11/14 coding mini-suite |
-| `qwen2.5:7b` | Ollama | 46.1 | 32,768 | tools | 8/14 coding |
-| `qwen2.5-coder:7b` | Ollama | 46.2 | 32,768 | tools, insert | 9/14 coding |
-| `qwen2.5:3b` | Ollama | 94.9 (39–92 variance) | 32,768 | tools, file read | live-fetch PASS |
-| `llama3.2:1b` | Ollama | **163.6** | 131,072 | tools | fastest local; 5/14 coding |
-| `llama3.2:3b` | Ollama | 93.8 | 131,072 | tools | 13/14 coding, JSON-key fails |
-| `qwen3:30b-a3b` | Ollama | 87.0 | 262,144 | tools, thinking | 0/14 (JSON fails ≥32K) |
-| **`qwen3.5:35b-a3b`** | Ollama | **76.4** | **262,144** | **tools, vision, thinking** | **best local balance** — 12/14 coding, live-fetch PASS, 22.2 GiB |
-| `gemma3:12b` | Ollama | 27.9 | 131,072 | vision, no tools | 10/14 coding |
-| `deepseek-r1:32b` | Ollama | 10.7 | 131,072 | tools, thinking | 0/14 (reasoning eats budget) |
-| `qwen2.5:32b` | Ollama | 10.5 | 32,768 | tools | 9/14 |
-| `llama3.3:70b` | Ollama | 4.8 | 131,072 | tools | **14/14 coding** — best quality, 33× slower than 1b |
-
-**Local rules that emerged:**
-- **Every fast local row is MoE.** Every dense row ≥14B is ≤24 tok/s. That is the GB10 rule, not a tuning artifact.
-- **Local context ceiling is latency, not metadata.** A 261,652-token local retrieval took **164.3 s** (~1,593 tok/s prefill). Near-1M locally is not interactive even when technically supported.
-- vLLM's 8,192-total cap and missing tool parser make it strictly worse than Ollama for our workloads at this moment.
-
-### Locally-runnable models we have NOT pulled yet (GX10 candidates)
-
-| Candidate | Why it matters | Fits in 121 GiB? |
-|---|---|---|
-| `gpt-oss-120b` (MXFP4) | ~45 tok/s decode on GB10-class hardware; 131K context; large knowledge | Yes |
-| `qwen3.8-27b` / Qwen3-Coder NVFP4 | High coding quality, ~30–60 tok/s, 128K–256K context; multiple instances possible | Yes |
-| `nemotron-3-nano-omni-30b-a3b-reasoning` | Native tools + text/image/audio/video; MoE so fast | Yes |
-| `gemma-4-26b-a4b` / `gemma-4-31b` | Multimodal, 262K context | Yes |
-
----
-
 ## 2. Our Current Models — FREE (CLOUD)
 
 Zero token price **and replenishing quota**. All three members of this category rotate inside one LiteLLM alias, `free-HighTPS_Context`, with `max_price: {prompt: 0, completion: 0}` (hard fence: quota exhaustion fails rather than bills).
+
+### 2A. FREE CLOUD (RAN) — measured through our harness
 
 | Model | Access path | tok/s (e2e) | Context | Capabilities | Strict $0? |
 |---|---|---:|---:|---|---|
 | **`nvidia/nemotron-3.5-lightning:free`** | OpenRouter → Nvidia | **51.8** mean | **1,000,000** | text, tools, reasoning | **yes** (0 prompt/0 completion) |
 | **`nvidia/nemotron-3.5-super-vl:free`** | OpenRouter → Nvidia | 20.4 | **1,000,000** | vision at backend, tools, reasoning | **yes** |
+
+### 2B. FREE CLOUD (THEORETICAL) — zero-price metadata, not yet run through our harness
+
+| Model | Access path | tok/s (e2e) | Context | Capabilities | Strict $0? |
+|---|---|---:|---:|---|---|
 | `nvidia/nemotron-3-ultra-550b-a55b:free` | OpenRouter → Nvidia | not measured | 1,000,000 | text, tools, reasoning | **yes** |
 | `baidu/ernie-5.5-flash-preview:free` | OpenRouter → Baidu | not measured | 1,024,000 | text, tools, reasoning, 921,600 max out | **yes** |
 | `thinkingmachines/inkling-2-small:free` | OpenRouter | not measured | 1,048,576 | text+image, tools, reasoning | **yes** |
@@ -69,12 +31,19 @@ Zero token price **and replenishing quota**. All three members of this category 
 
 ## 3. Our Current Models — PAID (CLOUD)
 
+### 3A. PAID CLOUD (RAN) — measured through our harness
+
 | Model | tok/s (e2e) | Context | Capabilities | Caveat |
 |---|---:|---:|---|---|
 | **Mercury-3** (Inception) | **547.8** | 1,000,000 | text, tools | fastest paid we run; ~10.6× Lightning |
 | Grok 4.7 (xAI) | 98.7 | 500,000 | vision, tools, web | half the context of Nemotron |
 | DeepSeek V4 Pro | 61.9 | 1,048,576 | text (vision withheld), 393,216 max out | reasoning ate the 220-token budget in our test |
 | Kimi K3.1 Pro (Moonshot) | 33.6 | 1,048,576 | text, tools | needs `temperature: 1`; 217/220 output was reasoning |
+
+### 3B. PAID CLOUD (THEORETICAL) — configured but not yet run through our harness
+
+| Model | tok/s (e2e) | Context | Capabilities | Caveat |
+|---|---:|---:|---|---|
 | Unmeasured: Claude Haiku 4.5, GPT-5.5-instant, GPT-5-chat, MiniMax-M2, Ring 2.6 1T | — | — | — | no same-harness numbers |
 
 **Caveat that matters for decision-making:** the TPS figures for Kimi and DeepSeek are **not useful-answer throughput**. Both spent the entire small output budget on reasoning and returned no final answer. Their real throughput for bounded-output tasks is likely worse than the number suggests, and their effective context advantage over Nemotron is **48,576 tokens (4.63%)** — not a meaningful differentiator.
