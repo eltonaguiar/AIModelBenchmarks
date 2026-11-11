@@ -231,3 +231,18 @@ Two practical consequences:
 
 1. **Interactive work in Open WebUI is ungoverned.** If $0, fallback policy or rate accounting matter, call :4000 directly rather than the UI.
 2. **vLLM is under-allocated.** At 0.35 utilisation it cannot serve a larger window or a tool parser; raising utilisation and adding `--enable-auto-tool-choice --tool-call-parser` would materially change Category A. We changed nothing here — this is a measured observation, not a recommendation to edit a shared service.
+
+---
+
+## 10. Notes on `BENCH_MODEL_PERFORMANCE_SUMMARY.md` (third file in this repo)
+
+This one is a **digest**, not a measurement run: it restates figures from the earlier session summaries and adds no new tests. Its framing is sound and its reasoning caveat for Kimi/DeepSeek is correct. Specific corrections:
+
+1. **The local category is effectively empty** (one row, `Qwen2.5-14B`, TPS "N/A"). This host runs **22 local generation models**; the measured spread is 163.6 tok/s (`llama3.2:1b`) down to 4.8 tok/s (`llama3.3:70b`), with `qwen3.5:35b-a3b` at 76.4 tok/s / 262K context as the balanced pick. See §1A — "local = Qwen2.5-14B only" understates Category A by roughly an order of magnitude in capability, and hides that the best local model is 9.5× faster than the vLLM one it lists.
+2. **"Paid Cloud (Moonshot) 5,000 RPM / 3M TPM" is our router config, not Moonshot's limit.** 5,000 RPM and 3,000,000 TPM are the `paid-mode` group's LiteLLM deployment parameters in `litellm_config.yaml`. They are an internal throttle we set, not a ceiling the provider grants — presenting them as provider capacity is the kind of number that quietly becomes a planning assumption.
+3. **"Free Mode (Gemini) 1–15 RPM, 65s cooldown"** mixes three different things: per-deployment `rpm` values from our config (1/5/10/15), the router's 65 s cooldown after failures, and Gemini's own unpublished per-model limits. Only the first is ours; the cooldown is not a rate limit.
+4. **Groq free is missing entirely** — the single largest free-cloud fact available: **268–301 tok/s e2e measured**, 30 RPM / 8k TPM / 1k RPD / 200k TPD per model, 131K context. Its table therefore ranks Nemotron Lightning as the free-cloud speed leader when it is in fact ~5.5× slower than Groq.
+5. **`free-mode*` is presented as "free mode (Gemini)"**, but that group has 37 deployments and **falls back to `paid-mode`**. Calling it free is exactly the misreading §2 warns about.
+6. Minor: Grok 4.7 is labelled "text → text" — it is our only paid entry with vendor vision + web-search tools configured. Mercury-3 genuinely is text-only.
+
+What is worth keeping from it: the three-category structure, the 2.54× Lightning-vs-Super-VL ratio (matches our 51.8 / 20.4), and the explicit warning that Kimi/DeepSeek TPS is reasoning throughput rather than answer throughput.
