@@ -1,6 +1,6 @@
 ## 2. Our Current Models — FREE (CLOUD)
 
-Zero token price **and replenishing quota**. All three members of this category rotate inside one LiteLLM alias, `free-HighTPS_Context`, with `max_price: {prompt: 0, completion: 0}` (hard fence: quota exhaustion fails rather than bills).
+Zero token price **and replenishing quota**. Only the two RAN members below sit in one LiteLLM alias, `free-HighTPS_Context`, with `max_price: {prompt: 0, completion: 0}` (hard fence: quota exhaustion fails rather than bills).
 
 ### 2A. FREE CLOUD (RAN) — measured through our harness
 
