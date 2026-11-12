@@ -23,6 +23,7 @@ This is the normalized index. Every number is labeled as one of: **this session*
 | GHCOPILOT_GROK (this session) | `BENCH_GITHUBCOPILOT_GROK_GHCOPILOT_GROK.MD` | This follow-up adds the final runtime/config coverage cross-check. The unsuffixed file is a different author. |
 | NEMO_HERMES | `BENCH_NEMOTRON_HERMES.MD` | Present from `d84f6a1`; user says Hermes is still pending/in progress. |
 | KILO_V2 | — | **In progress; not on `main` at last fetch.** |
+| LOCAL_ENGINES (Freebuff, this session) | `BENCH_GX10_LOCAL_ENGINES_2026-11-12_EST.MD` | New: Ollama-vs-vLLM head-to-head from one session on this host, full 26-model inventory with sizes, published GX10 corpus, and a dedicated `:4000` model-name plan. Corrects 4 peer claims. |
 
 ---
 
@@ -238,3 +239,11 @@ Hermes lists `usb-mistral-nemo-12b` and `library-mistral-nemo-latest` as residen
 ### Still pending
 
 KILO_V2 is in progress and was not on `main` at last fetch. Hermes's report is present, but the user says it may still be in progress. OPENCODE, KILO_V1, FREEBUFF, and ZOOCODE are marked done by the user.
+
+### `BENCH_GX10_LOCAL_ENGINES_2026-11-12_EST.MD` — Freebuff, this session
+
+First file here that answers "Ollama or vLLM on *this* box" from one session instead of cross-report comparison.
+Answers: Ollama wins single-stream **as configured** (74–85 tok/s MoE vs 8 tok/s bf16 8B); vLLM wins concurrency
+(54.7 tok/s @4 vs 8.0 single; published 350 @16); vLLM's 8 tok/s is our precision + driver, not the engine.
+Live bug found: `litellm_config.yaml:340` routes `ULTRA_FREE_TOOLS` to a vLLM model that is no longer served.
+Methodological rule established: sequential multi-model Ollama runs without unload measure memory residency, not speed.
