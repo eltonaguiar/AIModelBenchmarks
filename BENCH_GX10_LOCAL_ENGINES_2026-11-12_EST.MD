@@ -221,16 +221,69 @@ All third-party; none of it re-run here. Sources at the end of each block.
 
 Sources: `sergioamsilva/dgx-spark-field-notes` (model-selection + RESULTS), `Kleybrink/dgx-spark-bench` (21–24 model runs), `ctala.github.io/local-llm-agentic-workflows/benchmarks`, `pi3g.com` (AIPerf Pareto: Nemotron-3.5-Lightning-30B-A3B NVFP4 70 → 452 tok/s @c32), `llmrun.dev/device/asus-ascent-gx10`, `llmconfigurator.com/en/best-models/nvidia-dgx-spark`, `tokenstead.ai` (BridgeBench: Qwen 3.5 27B 11.1 tok/s / 76.3% vs GPT-OSS 120B 41.9 tok/s / 74.0%), `heitor-mocelin/dgx-spark-research` (70B at 5.4 tok/s = 98% roofline).
 
-### 6.4 The highest-leverage fix we have not applied
+### 6.4 CUDA graphs and the driver table — CORRECTED
 
-`NathanMaine/NVIDIA-DGX-Spark-with-vLLM` measured, on this same hardware class:
+> **Correction (same day, 2026-11-12).** The first version of this section asserted "driver 580
+> cannot capture CUDA graphs on GB10 at all" and called the driver upgrade "the highest-leverage
+> fix" worth ~2.8×. **Both are retracted.** The claim does not survive contact with this host's
+> own logs, and the arithmetic does not support the transfer. Details below.
+
+`NathanMaine/NVIDIA-DGX-Spark-with-vLLM` measured, on this hardware class, **Qwen3-Coder-Next
+80B-A3B MoE in int4-AutoRound (~41 GB)** — not an 8B dense model:
 
 | Config | Single | 4 concurrent |
 |---|---:|---:|
 | Driver 580.126.09 + `--enforce-eager` | 25 tok/s | 67 tok/s |
 | Driver **595.84** + CUDA graphs | **70 tok/s** | **149 tok/s** |
 
-**We are on 580.178.04.** Driver 580 cannot capture CUDA graphs on GB10 at all, per that repo's TROUBLESHOOTING #7. A driver upgrade is worth **~2.8× single-stream and ~2.2× concurrent** on vLLM — bigger than any model swap available to us, and it explains a large share of our 8 tok/s. It also costs a reboot, so it is the operator's call, not a silent change.
+Two things that row pair does *not* establish:
+
+1. **The 580 row deliberately turned graphs off.** `--enforce-eager` *is* the flag that disables
+   CUDA graph capture. So 25 → 70 mostly measures eager → graphs, not 580 → 595. That repo's own
+   README says so: "You can work around it with `--enforce-eager`, but that costs roughly 2.8×."
+   The driver gate is real for *their* kernel paths — SM121a NVFP4/Marlin capture is reported
+   broken under 580 upstream, and NVFP4 needs driver ≥590 — but it is not a property of the host
+   or of bf16 kernels.
+2. **Their 70 tok/s is not transferable to our model.** Active parameters decide decode speed:
+   3B active at 4 bits = 1.5 GB read/token → 182 tok/s roofline, so 70 is 38% of it. Our
+   Qwen3-8B is **dense 8.2B at bf16 = 16.4 GB/token → 16.6 tok/s single-stream roofline.** We
+   measure 8.0 = 48% of roofline, which is ordinary efficiency. No driver lifts 8B bf16 past
+   ~16.6 tok/s on 273 GB/s.
+
+**Verified on this host** (vLLM 0.21.0, torch 2.11.0+cu130, driver 580.178.04, CUDA 13.0
+ceiling): CUDA graphs **captured successfully** — `enforce_eager=False`,
+`cudagraph_mode=FULL_AND_PIECEWISE`, 51 piecewise + 35 full graphs at 100%, `CUDA graph pool
+memory: 9.17 GiB (actual)`, and no eager fallback anywhere in `/tmp/vllm*.log`. Capture works for
+standard bf16 kernels on 580.
+
+**Correct lever ranking for this box: quantization and active-parameter count ≫ driver.**
+The real case for 595 is (a) NVFP4 weights, gated at driver ≥590, and (b) newer NGC containers
+built for CUDA 13.2 (≥595.58; Ubuntu offers `nvidia-driver-595-server-open` 595.91.07 here).
+It is not a 2.8× win against a bf16 8B, and it costs a reboot — operator's call.
+
+### 6.5 Four numbering systems that get quoted in the same sentence
+
+These get conflated constantly because blog posts list them side by side. They are unrelated
+schemes, and none of them is a version of another:
+
+| Number | What it actually is | On this box |
+|---|---|---|
+| `580.178.04` | **NVIDIA driver** — `branch.minor.build`. The first field is the release *branch*, shared by many separate builds (`580.95.05`, `580.126.09`, `580.159.03`, `580.173.02`, `580.178.04` are all branch 580). `595` is a **new branch**, not a point release. | 580.178.04 |
+| `0.21.0` | **vLLM package** — ordinary semver, moving independently of the driver. | 0.21.0 |
+| `13.0` / `13.2` | **CUDA** — the maximum runtime the driver supports, *not* what is inside a venv or container. | 13.0 ceiling |
+| `26.02` / `26.04` | **NGC container tag** — `year.month`. Each tag pins one vLLM build to one CUDA version. | n/a (we run a venv) |
+
+The only reason these appear together is a **dependency chain**, not a shared numbering:
+
+```
+driver branch  →  max CUDA version  →  which vLLM wheels / NGC tags can load
+```
+
+Reported worked example: driver 580.173.02 caps its forward-compat layer at CUDA 13.1, so the
+newest NGC tag that runs is 26.02 (vLLM 0.15.1) — but Qwen3.5 support needs vLLM ≥0.19, first
+shipped in 26.03+, built against CUDA 13.2, which in turn needs driver **≥595.58**. So the driver
+gates *which vLLM you are allowed to run*; it does not multiply tokens per second on its own.
+That distinction is exactly what the retracted claim above got wrong.
 
 ---
 
@@ -321,7 +374,7 @@ Optional sixth, **batch only** (never a UI default): `gx10-batch` → `ollama_ch
 ### 8.4 To make the local path actually good
 1. `OLLAMA_CONTEXT_LENGTH=32768` (or 65536) in the systemd drop-in — otherwise every model is capped at 16K regardless of catalog.
 2. `--gpu-memory-utilization 0.28` on vLLM so the two engines coexist in 121 GiB.
-3. Driver 580.178.04 → 595.84 for CUDA graphs (§6.4, ~2.8×).
+3. Driver 580.178.04 → 595.91.07 **only if** moving to NVFP4 weights (≥590 gate) or newer NGC containers (≥595.58). Not a throughput win for the current bf16 8B — see the §6.4 correction.
 4. `OLLAMA_MAX_LOADED_MODELS=1` if running as a service, so servicing one request cannot evict another mid-flight.
 
 ---
