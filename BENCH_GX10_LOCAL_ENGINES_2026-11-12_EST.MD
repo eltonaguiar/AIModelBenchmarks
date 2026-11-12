@@ -259,7 +259,8 @@ standard bf16 kernels on 580.
 **Correct lever ranking for this box: quantization and active-parameter count ≫ driver.**
 The real case for 595 is (a) NVFP4 weights, gated at driver ≥590, and (b) newer NGC containers
 built for CUDA 13.2 (≥595.58; Ubuntu offers `nvidia-driver-595-server-open` 595.91.07 here).
-It is not a 2.8× win against a bf16 8B, and it costs a reboot — operator's call.
+It is not a 2.8× win against a bf16 8B, and it costs a reboot — operator's call, since
+decided: **skip it** (§8.4 item 3).
 
 ### 6.5 Four numbering systems that get quoted in the same sentence
 
@@ -374,8 +375,14 @@ Optional sixth, **batch only** (never a UI default): `gx10-batch` → `ollama_ch
 ### 8.4 To make the local path actually good
 1. `OLLAMA_CONTEXT_LENGTH=32768` (or 65536) in the systemd drop-in — otherwise every model is capped at 16K regardless of catalog.
 2. `--gpu-memory-utilization 0.28` on vLLM so the two engines coexist in 121 GiB.
-3. Driver 580.178.04 → 595.91.07 **only if** moving to NVFP4 weights (≥590 gate) or newer NGC containers (≥595.58). Not a throughput win for the current bf16 8B — see the §6.4 correction.
+3. ~~Driver 580.178.04 → 595.91.07~~ — **SKIPPED by operator decision, 2026-11-12.** It buys no measured throughput on the bf16 8B we actually run (see §6.4), its real benefits (NVFP4 kernels, NGC 26.03+ containers) are unverified *on GX10 hardware specifically*, and changing driver branch on a 121 GiB unified-memory box risks the one setup that currently works — for a reboot and an unmeasurable gain. Do not re-propose it without a measured NVFP4 result **on this exact host**, from someone who has already run it.
 4. `OLLAMA_MAX_LOADED_MODELS=1` if running as a service, so servicing one request cannot evict another mid-flight.
+
+> **Standing rule (operator, 2026-11-12):** if something is risky **and** not demonstrably supported
+> on GX10 / GB10 hardware, **skip it** — do not try it "to see." Numbers from DGX Spark blogs,
+> NVIDIA tables and other people's GB10 boxes are *leads to verify on this host*, never a reason to
+> reconfigure a working host. This is why items 3 and the NVFP4 path are out of scope here, and why
+> §5.4's same-weights head-to-head was listed as not-run rather than attempted.
 
 ---
 
