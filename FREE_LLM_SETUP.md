@@ -4,7 +4,7 @@ Port `4000` runs a **LiteLLM proxy** (`litellm --config litellm_config.yaml --po
 
 ## How routing / naming works
 
-- `model_name` = the virtual name clients ask for (e.g. `ULTRA_FREE_CLOUD`, `ULTRA_FREE_TOOLS`, `ZZZ_PAID_MODE`).
+- `model_name` = the virtual name clients ask for (e.g. `ULTRA_FREE_CLOUD`, `ULTRA_FREE_TOOLS`, `ULTRA_PAID_MODE`).
 - `litellm_params.model` = the real upstream model id (e.g. `groq/qwen/qwen3.8-27b`, `ollama_chat/qwen2.5:14b`, `hosted_vllm/Qwen/Qwen2.5-14B-Instruct`).
 - `litellm_params.api_base` = upstream endpoint. Cloud providers use their public API base; local ones use `http://localhost:8000/v1` (vLLM) or `http://localhost:11434` (Ollama).
 - `litellm_params.api_key` = `os.environ/NAME` pulled from `~/dbpasses.txt` at launch by `tools/start_litellm_proxy.sh`. Never hardcoded in config.
@@ -14,10 +14,10 @@ Port `4000` runs a **LiteLLM proxy** (`litellm --config litellm_config.yaml --po
 
 ## Naming convention (binary)
 
-Every group starts with either `ULTRA_` (genuinely free, verified zero-cost) or `ZZZ_` (can bill, legacy, mixed, or untrusted — avoid unless you mean to spend):
+Every group starts with either `ULTRA_` (good / working / recommended) or `BAD_` (legacy non-free, not zero-cost guaranteed — avoid unless you mean to opt in):
 
-- **`ULTRA_*`** — free only. Use these for zero-cost contracts.
-- **`ZZZ_*`** — not free / can bill / legacy. Retained for backward compat only.
+- **`ULTRA_*`** — good models. Includes free local/cloud AND paid working models (inception, deepseek, grok, kimi, etc.). Use these as default.
+- **`BAD_*`** — legacy non-free mixed pools. Retained only for backward compatibility. NOT zero-cost guaranteed.
 
 ## Model groups — mapped AIs, rotation priority, rules
 
@@ -43,15 +43,15 @@ Every group starts with either `ULTRA_` (genuinely free, verified zero-cost) or 
 
 | Group | Mapped AIs | Notes |
 |-------|-----------|-------|
-| `ZZZ_PAID_MODE` | Anthropic haiku, deepseek, moonshot, aimlapi paid, hypereal gpt-5.5-instant, openai gpt-4o-mini (quota exhausted), xiaomi mimo, xai grok, bluesmind premium | Premium frontier — can bill. |
-| `ZZZ_PAID_MODE_FAST` | xai grok-4-fast, anthropic haiku, deepseek, bluesmind gpt-5-chat | Paid, >=50 tok/s — can bill. |
-| `ZZZ_PAID_MODE_LARGE` | Anthropic haiku, deepseek, hypereal gpt-5.5, bluesmind long-context | Paid long-context — can bill. |
-| `ZZZ_HYBRID_MODEL` | Groq, NVIDIA NIM, Gemini, GitHub Models, Hypereal | Mixed — can reach paid. Backward-compat alias. |
-| `ZZZ_HYBRID_MODEL_LARGE` | Gemini, NVIDIA NIM, Fireworks, Hypereal | Mixed large — can reach paid. Backward-compat alias. |
-| `ZZZ_BAD_LEGACY_MIXED_F_MODE` | Mixed cloud free + trial/paid | NOT a zero-cost guarantee. Opt-in compatibility only. |
-| `ZZZ_BAD_LEGACY_MIXED_F_MODE_FAST` | Historical mixed fast set | Not zero-cost guaranteed. |
-| `ZZZ_BAD_LEGACY_MIXED_F_MODE_TOOLS` | Historical mixed tool set | Includes paid-capable providers. |
-| `ZZZ_BAD_LEGACY_MIXED_F_MODE_LARGE` | Old mixed long-context pool | Not zero-cost guaranteed. |
+| `ULTRA_PAID_MODE` | Anthropic haiku, deepseek, moonshot, aimlapi paid, hypereal gpt-5.5-instant, openai gpt-4o-mini (quota exhausted), xiaomi mimo, xai grok, bluesmind premium | Premium frontier — can bill. |
+| `ULTRA_PAID_MODE_FAST` | xai grok-4-fast, anthropic haiku, deepseek, bluesmind gpt-5-chat | Paid, >=50 tok/s — can bill. |
+| `ULTRA_PAID_MODE_LARGE` | Anthropic haiku, deepseek, hypereal gpt-5.5, bluesmind long-context | Paid long-context — can bill. |
+| `ULTRA_HYBRID_MODEL` | Groq, NVIDIA NIM, Gemini, GitHub Models, Hypereal | Mixed — can reach paid. Backward-compat alias. |
+| `ULTRA_HYBRID_MODEL_LARGE` | Gemini, NVIDIA NIM, Fireworks, Hypereal | Mixed large — can reach paid. Backward-compat alias. |
+| `BAD_LEGACY_MIXED_F_MODE` | Mixed cloud free + trial/paid | NOT a zero-cost guarantee. Opt-in compatibility only. |
+| `BAD_LEGACY_MIXED_F_MODE_FAST` | Historical mixed fast set | Not zero-cost guaranteed. |
+| `BAD_LEGACY_MIXED_F_MODE_TOOLS` | Historical mixed tool set | Includes paid-capable providers. |
+| `BAD_LEGACY_MIXED_F_MODE_LARGE` | Old mixed long-context pool | Not zero-cost guaranteed. |
 
 ## On images / vision
 
